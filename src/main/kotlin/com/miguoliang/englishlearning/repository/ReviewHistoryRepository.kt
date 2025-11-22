@@ -1,14 +1,14 @@
 package com.miguoliang.englishlearning.repository
 
 import com.miguoliang.englishlearning.model.ReviewHistory
-import io.quarkus.hibernate.reactive.panache.PanacheRepository
-import io.smallrye.mutiny.Multi
+import io.quarkus.hibernate.reactive.panache.PanacheRepositoryBase
+import io.smallrye.mutiny.coroutines.awaitSuspending
 import jakarta.enterprise.context.ApplicationScoped
 
 @ApplicationScoped
-class ReviewHistoryRepository : PanacheRepository<ReviewHistory> {
+class ReviewHistoryRepository : PanacheRepositoryBase<ReviewHistory, Long> {
 
-    fun findByAccountCardId(accountCardId: Long): Multi<ReviewHistory> {
-        return find("accountCardId", accountCardId).stream()
+    suspend fun findByAccountCardId(accountCardId: Long): List<ReviewHistory> {
+        return find("accountCardId", accountCardId).list().awaitSuspending()
     }
 }

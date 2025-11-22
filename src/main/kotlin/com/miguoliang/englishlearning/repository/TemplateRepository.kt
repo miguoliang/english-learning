@@ -2,22 +2,21 @@ package com.miguoliang.englishlearning.repository
 
 import com.miguoliang.englishlearning.model.Template
 import io.quarkus.hibernate.reactive.panache.PanacheRepositoryBase
-import io.smallrye.mutiny.Multi
-import io.smallrye.mutiny.Uni
+import io.smallrye.mutiny.coroutines.awaitSuspending
 import jakarta.enterprise.context.ApplicationScoped
 
 @ApplicationScoped
 class TemplateRepository : PanacheRepositoryBase<Template, String> {
 
-    fun streamAll(): Multi<Template> {
-        return findAll().stream()
+    suspend fun streamAll(): List<Template> {
+        return findAll().list().awaitSuspending()
     }
 
-    fun findByCode(code: String): Uni<Template?> {
-        return findById(code)
+    suspend fun findByCode(code: String): Template? {
+        return findById(code).awaitSuspending()
     }
 
-    fun findByName(name: String): Uni<Template?> {
-        return find("name", name).firstResult()
+    suspend fun findByName(name: String): Template? {
+        return find("name", name).firstResult().awaitSuspending()
     }
 }

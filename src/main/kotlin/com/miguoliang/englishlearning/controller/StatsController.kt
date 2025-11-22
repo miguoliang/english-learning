@@ -2,8 +2,6 @@ package com.miguoliang.englishlearning.controller
 
 import com.miguoliang.englishlearning.dto.StatsDto
 import com.miguoliang.englishlearning.service.StatsService
-import io.smallrye.mutiny.Uni
-import io.smallrye.mutiny.coroutines.asUni
 import jakarta.ws.rs.*
 import jakarta.ws.rs.core.MediaType
 import jakarta.ws.rs.core.Response
@@ -28,18 +26,17 @@ class StatsController(
      */
     @GET
     @Path("/me/stats")
-    fun getStats(): Uni<Response> {
-        // TODO: Extract accountId from JWT token
-        val accountId = 1L // Placeholder
+    suspend fun getStats(): Response {
+        return try {
+            // TODO: Extract accountId from JWT token
+            val accountId = 1L // Placeholder
 
-        return statsService.getStats(accountId)
-            .map { stats ->
-                Response.ok(stats).build()
-            }
-            .onFailure().recoverWithItem { error ->
-                Response.status(Response.Status.INTERNAL_SERVER_ERROR)
-                    .entity(StatsDto(0L, 0L, 0L, 0L, emptyMap()))
-                    .build()
-            }
+            val stats = statsService.getStats(accountId)
+            Response.ok(stats).build()
+        } catch (error: Exception) {
+            Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                .entity(StatsDto(0L, 0L, 0L, 0L, emptyMap()))
+                .build()
+        }
     }
 }

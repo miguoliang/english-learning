@@ -6,7 +6,8 @@ import com.miguoliang.englishlearning.model.AccountCard
 import com.miguoliang.englishlearning.model.ReviewHistory
 import com.miguoliang.englishlearning.repository.AccountCardRepository
 import com.miguoliang.englishlearning.repository.ReviewHistoryRepository
-import io.smallrye.mutiny.Uni
+import io.quarkus.hibernate.reactive.panache.common.WithTransaction
+import io.smallrye.mutiny.coroutines.awaitSuspending
 import jakarta.enterprise.context.ApplicationScoped
 import java.time.LocalDateTime
 
@@ -27,15 +28,15 @@ class AccountCardService(
      *
      * @param accountId Account ID
      * @param cardTypeCodes Optional list of card type codes (if null, initializes for all types)
-     * @return Uni<Int> count of created cards
+     * @return count of created cards
      */
-    fun initializeCards(
+    suspend fun initializeCards(
         accountId: Long,
         cardTypeCodes: List<String>?,
-    ): Uni<Int> {
+    ): Int {
         // TODO: This should trigger Temporal workflow for card initialization
         // For now, this is a placeholder
-        return Uni.createFrom().item(0)
+        return 0
     }
 
     /**
@@ -44,13 +45,13 @@ class AccountCardService(
      * @param accountId Account ID
      * @param pageable Pagination parameters
      * @param cardTypeCode Optional card type filter
-     * @return Uni<Page> of AccountCard items
+     * @return Page of AccountCard items
      */
-    fun getDueCards(
+    suspend fun getDueCards(
         accountId: Long,
         pageable: Pageable,
         cardTypeCode: String? = null,
-    ): Uni<Page<AccountCard>> {
+    ): Page<AccountCard> {
         val now = LocalDateTime.now()
         return if (cardTypeCode != null) {
             paginationHelper.paginate(
@@ -78,50 +79,43 @@ class AccountCardService(
      * @param accountId Account ID
      * @param cardId Card ID
      * @param quality Quality rating (0-5)
-     * @return Uni<AccountCard> updated AccountCard
+     * @return updated AccountCard
      */
-    fun reviewCard(
+    @WithTransaction
+    suspend fun reviewCard(
         accountId: Long,
         cardId: Long,
         quality: Int,
-    ): Uni<AccountCard> {
-        return accountCardRepository.findById(cardId)
-            .onItem().ifNull().failWith { IllegalStateException("Card not found") }
-            .onItem().transform { card ->
-                if (card.accountId != accountId) {
-                    throw IllegalArgumentException("Card does not belong to account")
-                }
-                card
-            }
-            .onItem().transform { card ->
-                // Apply SM-2 algorithm
-                sm2Algorithm
-                    .calculateNextReview(card, quality)
-                    .copy(updatedAt = java.time.Instant.now())
-            }
-            .flatMap { updatedCard ->
-                // Save updated card
-                accountCardRepository.persistAndFlush(updatedCard)
-                    .map { updatedCard }
-            }
-            .flatMap { savedCard ->
-                // Create review history entry
-                val cardId = savedCard.id
-                if (cardId == null) {
-                    Uni.createFrom().failure(IllegalStateException("Saved card must have an ID"))
-                } else {
-                    val reviewHistory =
-                        ReviewHistory(
-                            id = null,
-                            accountCardId = cardId,
-                            quality = quality,
-                            reviewedAt = LocalDateTime.now(),
-                            createdBy = null,
-                        )
-                    reviewHistoryRepository.persistAndFlush(reviewHistory)
-                        .map { savedCard }
-                }
-            }
+    ): AccountCard {
+        val card = accountCardRepository.findById(cardId).awaitSuspending()
+            ?: throw IllegalStateException("Card not found")
+
+        if (card.accountId != accountId) {
+            throw IllegalArgumentException("Card does not belong to account")
+        }
+
+        // Apply SM-2 algorithm
+        val updatedCard = sm2Algorithm
+            .calculateNextReview(card, quality)
+            .copy(updatedAt = java.time.Instant.now())
+
+        // Save updated card
+        accountCardRepository.persistAndFlush(updatedCard).awaitSuspending()
+
+        // Create review history entry
+        val savedCardId = updatedCard.id
+            ?: throw IllegalStateException("Saved card must have an ID")
+
+        val reviewHistory = ReviewHistory(
+            id = null,
+            accountCardId = savedCardId,
+            quality = quality,
+            reviewedAt = LocalDateTime.now(),
+            createdBy = null,
+        )
+        reviewHistoryRepository.persistAndFlush(reviewHistory).awaitSuspending()
+
+        return updatedCard
     }
 
     /**
@@ -135,14 +129,14 @@ class AccountCardService(
      *   - `learning`: repetitions > 0 and < 3
      *   - `review`: next_review_date <= today
      *   - `all` or null: No status filter
-     * @return Uni<Page> of AccountCard items
+     * @return Page of AccountCard items
      */
-    fun getAccountCards(
+    suspend fun getAccountCards(
         accountId: Long,
         pageable: Pageable,
         cardTypeCode: String? = null,
         status: String? = null,
-    ): Uni<Page<AccountCard>> {
+    ): Page<AccountCard> {
         val now = LocalDateTime.now()
         val effectiveStatus = if (status == null || status == "all") null else status
 
@@ -228,15 +222,13 @@ class AccountCardService(
      *
      * @param accountId Account ID
      * @param cardId Card ID
-     * @return Uni<AccountCard> or null if not found or doesn't belong to account
+     * @return AccountCard or null if not found or doesn't belong to account
      */
-    fun getCardById(
+    suspend fun getCardById(
         accountId: Long,
         cardId: Long,
-    ): Uni<AccountCard?> {
-        return accountCardRepository.findById(cardId)
-            .map { card ->
-                if (card != null && card.accountId == accountId) card else null
-            }
+    ): AccountCard? {
+        val card = accountCardRepository.findById(cardId).awaitSuspending()
+        return if (card != null && card.accountId == accountId) card else null
     }
 }

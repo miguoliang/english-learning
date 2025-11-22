@@ -4,7 +4,6 @@ import com.miguoliang.englishlearning.common.Page
 import com.miguoliang.englishlearning.common.Pageable
 import com.miguoliang.englishlearning.model.Knowledge
 import com.miguoliang.englishlearning.repository.KnowledgeRepository
-import io.smallrye.mutiny.Uni
 import jakarta.enterprise.context.ApplicationScoped
 
 /**
@@ -20,16 +19,16 @@ class KnowledgeService(
      *
      * @param pageable Pagination parameters
      * @param filter Optional filter expression (not implemented in MVP)
-     * @return Uni<Page> of Knowledge items
+     * @return Page of Knowledge items
      */
-    fun getKnowledge(
+    suspend fun getKnowledge(
         pageable: Pageable,
         filter: String? = null,
-    ): Uni<Page<Knowledge>> {
+    ): Page<Knowledge> {
         // TODO: Implement filter support for metadata queries
         return paginationHelper.paginate(
             knowledgeRepository.findAllOrderedByCode(pageable),
-            knowledgeRepository.count(),
+            knowledgeRepository.countAll(),
             pageable,
         )
     }
@@ -38,25 +37,21 @@ class KnowledgeService(
      * Get single knowledge item by code.
      *
      * @param code Knowledge code identifier
-     * @return Uni<Knowledge> or null if not found
+     * @return Knowledge or null if not found
      */
-    fun getKnowledgeByCode(code: String): Uni<Knowledge?> = knowledgeRepository.findByCode(code)
+    suspend fun getKnowledgeByCode(code: String): Knowledge? = knowledgeRepository.findByCode(code)
 
     /**
      * Batch load knowledge items by codes.
      *
      * @param codes Collection of knowledge codes
-     * @return Uni<Map> of code to Knowledge
+     * @return Map of code to Knowledge
      */
-    fun getKnowledgeByCodes(codes: Collection<String>): Uni<Map<String, Knowledge>> =
+    suspend fun getKnowledgeByCodes(codes: Collection<String>): Map<String, Knowledge> =
         if (codes.isEmpty()) {
-            Uni.createFrom().item(emptyMap())
+            emptyMap()
         } else {
-            knowledgeRepository
-                .findByCodeIn(codes)
-                .collect().asList()
-                .map { list ->
-                    list.associateBy { knowledge -> knowledge.code }
-                }
+            knowledgeRepository.findByCodeIn(codes)
+                .associateBy { knowledge -> knowledge.code }
         }
 }

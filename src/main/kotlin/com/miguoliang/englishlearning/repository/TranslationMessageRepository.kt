@@ -2,29 +2,28 @@ package com.miguoliang.englishlearning.repository
 
 import com.miguoliang.englishlearning.model.TranslationMessage
 import io.quarkus.hibernate.reactive.panache.PanacheRepositoryBase
-import io.smallrye.mutiny.Multi
-import io.smallrye.mutiny.Uni
+import io.smallrye.mutiny.coroutines.awaitSuspending
 import jakarta.enterprise.context.ApplicationScoped
 
 @ApplicationScoped
 class TranslationMessageRepository : PanacheRepositoryBase<TranslationMessage, String> {
 
-    fun findByTranslationKeyCode(translationKeyCode: String): Multi<TranslationMessage> {
-        return find("translationKeyCode", translationKeyCode).stream()
+    suspend fun findByTranslationKeyCode(translationKeyCode: String): List<TranslationMessage> {
+        return find("translationKeyCode", translationKeyCode).list().awaitSuspending()
     }
 
-    fun findByTranslationKeyCodeAndLocaleCode(
+    suspend fun findByTranslationKeyCodeAndLocaleCode(
         translationKeyCode: String,
         localeCode: String,
-    ): Uni<TranslationMessage?> {
+    ): TranslationMessage? {
         return find(
             "translationKeyCode = ?1 and localeCode = ?2",
             translationKeyCode,
             localeCode,
-        ).firstResult()
+        ).firstResult().awaitSuspending()
     }
 
-    fun findByLocaleCode(localeCode: String): Multi<TranslationMessage> {
-        return find("localeCode", localeCode).stream()
+    suspend fun findByLocaleCode(localeCode: String): List<TranslationMessage> {
+        return find("localeCode", localeCode).list().awaitSuspending()
     }
 }

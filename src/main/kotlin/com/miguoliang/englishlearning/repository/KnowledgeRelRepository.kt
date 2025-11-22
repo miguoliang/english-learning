@@ -1,30 +1,29 @@
 package com.miguoliang.englishlearning.repository
 
 import com.miguoliang.englishlearning.model.KnowledgeRel
-import io.quarkus.hibernate.reactive.panache.PanacheRepository
-import io.smallrye.mutiny.Multi
-import io.smallrye.mutiny.Uni
+import io.quarkus.hibernate.reactive.panache.PanacheRepositoryBase
+import io.smallrye.mutiny.coroutines.awaitSuspending
 import jakarta.enterprise.context.ApplicationScoped
 
 @ApplicationScoped
-class KnowledgeRelRepository : PanacheRepository<KnowledgeRel> {
+class KnowledgeRelRepository : PanacheRepositoryBase<KnowledgeRel, Long> {
 
-    fun findBySourceKnowledgeCode(sourceKnowledgeCode: String): Multi<KnowledgeRel> {
-        return find("sourceKnowledgeCode", sourceKnowledgeCode).stream()
+    suspend fun findBySourceKnowledgeCode(sourceKnowledgeCode: String): List<KnowledgeRel> {
+        return find("sourceKnowledgeCode", sourceKnowledgeCode).list().awaitSuspending()
     }
 
-    fun findByTargetKnowledgeCode(targetKnowledgeCode: String): Multi<KnowledgeRel> {
-        return find("targetKnowledgeCode", targetKnowledgeCode).stream()
+    suspend fun findByTargetKnowledgeCode(targetKnowledgeCode: String): List<KnowledgeRel> {
+        return find("targetKnowledgeCode", targetKnowledgeCode).list().awaitSuspending()
     }
 
-    fun findBySourceKnowledgeCodeAndTargetKnowledgeCode(
+    suspend fun findBySourceKnowledgeCodeAndTargetKnowledgeCode(
         sourceKnowledgeCode: String,
         targetKnowledgeCode: String,
-    ): Uni<KnowledgeRel?> {
+    ): KnowledgeRel? {
         return find(
             "sourceKnowledgeCode = ?1 and targetKnowledgeCode = ?2",
             sourceKnowledgeCode,
             targetKnowledgeCode,
-        ).firstResult()
+        ).firstResult().awaitSuspending()
     }
 }

@@ -2,225 +2,224 @@ package com.miguoliang.englishlearning.repository
 
 import com.miguoliang.englishlearning.common.Pageable
 import com.miguoliang.englishlearning.model.AccountCard
-import io.quarkus.hibernate.reactive.panache.PanacheRepository
+import io.quarkus.hibernate.reactive.panache.PanacheRepositoryBase
 import io.quarkus.panache.common.Page
-import io.smallrye.mutiny.Multi
-import io.smallrye.mutiny.Uni
+import io.smallrye.mutiny.coroutines.awaitSuspending
 import jakarta.enterprise.context.ApplicationScoped
 import java.time.LocalDateTime
 
 @ApplicationScoped
-class AccountCardRepository : PanacheRepository<AccountCard> {
+class AccountCardRepository : PanacheRepositoryBase<AccountCard, Long> {
 
-    fun findByAccountId(accountId: Long): Multi<AccountCard> {
-        return find("accountId", accountId).stream()
+    suspend fun findByAccountId(accountId: Long): List<AccountCard> {
+        return find("accountId", accountId).list().awaitSuspending()
     }
 
-    fun findDueCardsByAccountId(
+    suspend fun findDueCardsByAccountId(
         accountId: Long,
         date: LocalDateTime,
         pageable: Pageable,
-    ): Multi<AccountCard> {
+    ): List<AccountCard> {
         return find(
             "accountId = ?1 and nextReviewDate <= ?2 order by nextReviewDate",
             accountId,
             date,
-        ).stream().page(Page.of(pageable.page, pageable.size))
+        ).page(Page.of(pageable.page, pageable.size)).list().awaitSuspending()
     }
 
-    fun countDueCardsByAccountId(
+    suspend fun countDueCardsByAccountId(
         accountId: Long,
         date: LocalDateTime,
-    ): Uni<Long> {
-        return count("accountId = ?1 and nextReviewDate <= ?2", accountId, date)
+    ): Long {
+        return count("accountId = ?1 and nextReviewDate <= ?2", accountId, date).awaitSuspending()
     }
 
-    fun findDueCardsByAccountIdAndCardTypeCode(
+    suspend fun findDueCardsByAccountIdAndCardTypeCode(
         accountId: Long,
         date: LocalDateTime,
         cardTypeCode: String,
         pageable: Pageable,
-    ): Multi<AccountCard> {
+    ): List<AccountCard> {
         return find(
             "accountId = ?1 and nextReviewDate <= ?2 and cardTypeCode = ?3 order by nextReviewDate",
             accountId,
             date,
             cardTypeCode,
-        ).stream().page(Page.of(pageable.page, pageable.size))
+        ).page(Page.of(pageable.page, pageable.size)).list().awaitSuspending()
     }
 
-    fun countDueCardsByAccountIdAndCardTypeCode(
+    suspend fun countDueCardsByAccountIdAndCardTypeCode(
         accountId: Long,
         date: LocalDateTime,
         cardTypeCode: String,
-    ): Uni<Long> {
+    ): Long {
         return count(
             "accountId = ?1 and nextReviewDate <= ?2 and cardTypeCode = ?3",
             accountId,
             date,
             cardTypeCode,
-        )
+        ).awaitSuspending()
     }
 
-    fun findByAccountIdAndKnowledgeCodeAndCardTypeCode(
+    suspend fun findByAccountIdAndKnowledgeCodeAndCardTypeCode(
         accountId: Long,
         knowledgeCode: String,
         cardTypeCode: String,
-    ): Uni<AccountCard?> {
+    ): AccountCard? {
         return find(
             "accountId = ?1 and knowledgeCode = ?2 and cardTypeCode = ?3",
             accountId,
             knowledgeCode,
             cardTypeCode,
-        ).firstResult()
+        ).firstResult().awaitSuspending()
     }
 
-    fun findByAccountId(
+    suspend fun findByAccountId(
         accountId: Long,
         pageable: Pageable,
-    ): Multi<AccountCard> {
+    ): List<AccountCard> {
         return find("accountId = ?1 order by id", accountId)
-            .page(Page.of(pageable.page, pageable.size))
+            .page(Page.of(pageable.page, pageable.size)).list().awaitSuspending()
     }
 
-    fun countByAccountId(accountId: Long): Uni<Long> {
-        return count("accountId", accountId)
+    suspend fun countByAccountId(accountId: Long): Long {
+        return count("accountId", accountId).awaitSuspending()
     }
 
-    fun findByAccountIdAndCardTypeCode(
+    suspend fun findByAccountIdAndCardTypeCode(
         accountId: Long,
         cardTypeCode: String,
         pageable: Pageable,
-    ): Multi<AccountCard> {
+    ): List<AccountCard> {
         return find(
             "accountId = ?1 and cardTypeCode = ?2 order by id",
             accountId,
             cardTypeCode,
-        ).stream().page(Page.of(pageable.page, pageable.size))
+        ).page(Page.of(pageable.page, pageable.size)).list().awaitSuspending()
     }
 
-    fun countByAccountIdAndCardTypeCode(
+    suspend fun countByAccountIdAndCardTypeCode(
         accountId: Long,
         cardTypeCode: String,
-    ): Uni<Long> {
-        return count("accountId = ?1 and cardTypeCode = ?2", accountId, cardTypeCode)
+    ): Long {
+        return count("accountId = ?1 and cardTypeCode = ?2", accountId, cardTypeCode).awaitSuspending()
     }
 
-    fun findByAccountIdAndStatusNew(
+    suspend fun findByAccountIdAndStatusNew(
         accountId: Long,
         pageable: Pageable,
-    ): Multi<AccountCard> {
+    ): List<AccountCard> {
         return find("accountId = ?1 and repetitions = 0 order by id", accountId)
-            .page(Page.of(pageable.page, pageable.size))
+            .page(Page.of(pageable.page, pageable.size)).list().awaitSuspending()
     }
 
-    fun countByAccountIdAndStatusNew(accountId: Long): Uni<Long> {
-        return count("accountId = ?1 and repetitions = 0", accountId)
+    suspend fun countByAccountIdAndStatusNew(accountId: Long): Long {
+        return count("accountId = ?1 and repetitions = 0", accountId).awaitSuspending()
     }
 
-    fun findByAccountIdAndStatusLearning(
+    suspend fun findByAccountIdAndStatusLearning(
         accountId: Long,
         pageable: Pageable,
-    ): Multi<AccountCard> {
+    ): List<AccountCard> {
         return find(
             "accountId = ?1 and repetitions > 0 and repetitions < 3 order by id",
             accountId,
-        ).stream().page(Page.of(pageable.page, pageable.size))
+        ).page(Page.of(pageable.page, pageable.size)).list().awaitSuspending()
     }
 
-    fun countByAccountIdAndStatusLearning(accountId: Long): Uni<Long> {
-        return count("accountId = ?1 and repetitions > 0 and repetitions < 3", accountId)
+    suspend fun countByAccountIdAndStatusLearning(accountId: Long): Long {
+        return count("accountId = ?1 and repetitions > 0 and repetitions < 3", accountId).awaitSuspending()
     }
 
-    fun findByAccountIdAndStatusReview(
+    suspend fun findByAccountIdAndStatusReview(
         accountId: Long,
         date: LocalDateTime,
         pageable: Pageable,
-    ): Multi<AccountCard> {
+    ): List<AccountCard> {
         return find(
             "accountId = ?1 and nextReviewDate <= ?2 order by id",
             accountId,
             date,
-        ).stream().page(Page.of(pageable.page, pageable.size))
+        ).page(Page.of(pageable.page, pageable.size)).list().awaitSuspending()
     }
 
-    fun countByAccountIdAndStatusReview(
+    suspend fun countByAccountIdAndStatusReview(
         accountId: Long,
         date: LocalDateTime,
-    ): Uni<Long> {
-        return count("accountId = ?1 and nextReviewDate <= ?2", accountId, date)
+    ): Long {
+        return count("accountId = ?1 and nextReviewDate <= ?2", accountId, date).awaitSuspending()
     }
 
-    fun findByAccountIdAndCardTypeCodeAndStatusNew(
+    suspend fun findByAccountIdAndCardTypeCodeAndStatusNew(
         accountId: Long,
         cardTypeCode: String,
         pageable: Pageable,
-    ): Multi<AccountCard> {
+    ): List<AccountCard> {
         return find(
             "accountId = ?1 and cardTypeCode = ?2 and repetitions = 0 order by id",
             accountId,
             cardTypeCode,
-        ).stream().page(Page.of(pageable.page, pageable.size))
+        ).page(Page.of(pageable.page, pageable.size)).list().awaitSuspending()
     }
 
-    fun countByAccountIdAndCardTypeCodeAndStatusNew(
+    suspend fun countByAccountIdAndCardTypeCodeAndStatusNew(
         accountId: Long,
         cardTypeCode: String,
-    ): Uni<Long> {
+    ): Long {
         return count(
             "accountId = ?1 and cardTypeCode = ?2 and repetitions = 0",
             accountId,
             cardTypeCode,
-        )
+        ).awaitSuspending()
     }
 
-    fun findByAccountIdAndCardTypeCodeAndStatusLearning(
+    suspend fun findByAccountIdAndCardTypeCodeAndStatusLearning(
         accountId: Long,
         cardTypeCode: String,
         pageable: Pageable,
-    ): Multi<AccountCard> {
+    ): List<AccountCard> {
         return find(
             "accountId = ?1 and cardTypeCode = ?2 and repetitions > 0 and repetitions < 3 order by id",
             accountId,
             cardTypeCode,
-        ).stream().page(Page.of(pageable.page, pageable.size))
+        ).page(Page.of(pageable.page, pageable.size)).list().awaitSuspending()
     }
 
-    fun countByAccountIdAndCardTypeCodeAndStatusLearning(
+    suspend fun countByAccountIdAndCardTypeCodeAndStatusLearning(
         accountId: Long,
         cardTypeCode: String,
-    ): Uni<Long> {
+    ): Long {
         return count(
             "accountId = ?1 and cardTypeCode = ?2 and repetitions > 0 and repetitions < 3",
             accountId,
             cardTypeCode,
-        )
+        ).awaitSuspending()
     }
 
-    fun findByAccountIdAndCardTypeCodeAndStatusReview(
+    suspend fun findByAccountIdAndCardTypeCodeAndStatusReview(
         accountId: Long,
         cardTypeCode: String,
         date: LocalDateTime,
         pageable: Pageable,
-    ): Multi<AccountCard> {
+    ): List<AccountCard> {
         return find(
             "accountId = ?1 and cardTypeCode = ?2 and nextReviewDate <= ?3 order by id",
             accountId,
             cardTypeCode,
             date,
-        ).stream().page(Page.of(pageable.page, pageable.size))
+        ).page(Page.of(pageable.page, pageable.size)).list().awaitSuspending()
     }
 
-    fun countByAccountIdAndCardTypeCodeAndStatusReview(
+    suspend fun countByAccountIdAndCardTypeCodeAndStatusReview(
         accountId: Long,
         cardTypeCode: String,
         date: LocalDateTime,
-    ): Uni<Long> {
+    ): Long {
         return count(
             "accountId = ?1 and cardTypeCode = ?2 and nextReviewDate <= ?3",
             accountId,
             cardTypeCode,
             date,
-        )
+        ).awaitSuspending()
     }
 }
