@@ -1,6 +1,5 @@
 package com.miguoliang.englishlearning.dto
 
-import com.fasterxml.jackson.annotation.JsonProperty
 import java.time.LocalDateTime
 
 /**
@@ -13,14 +12,10 @@ data class AccountCardDto(
     val cardType: CardTypeDto,
     val front: String? = null,
     val back: String? = null,
-    @JsonProperty("easeFactor")
     val easeFactor: java.math.BigDecimal,
-    @JsonProperty("intervalDays")
     val intervalDays: Int,
     val repetitions: Int,
-    @JsonProperty("nextReviewDate")
     val nextReviewDate: LocalDateTime,
-    @JsonProperty("lastReviewedAt")
     val lastReviewedAt: LocalDateTime?,
 )
 

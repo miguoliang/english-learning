@@ -1,6 +1,5 @@
 package com.miguoliang.englishlearning.dto
 
-import com.fasterxml.jackson.annotation.JsonProperty
 import org.springframework.data.domain.Page
 
 /**
@@ -18,9 +17,7 @@ data class PageDto<T>(
 data class PageInfoDto(
     val number: Int,
     val size: Int,
-    @JsonProperty("totalElements")
     val totalElements: Long,
-    @JsonProperty("totalPages")
     val totalPages: Int,
 )
 
