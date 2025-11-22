@@ -48,13 +48,13 @@ class KnowledgeService(
      * @param codes Collection of knowledge codes
      * @return Map of code to Knowledge
      */
-    suspend fun getKnowledgeByCodes(codes: Collection<String>): Map<String, Knowledge> {
-        if (codes.isEmpty()) {
-            return emptyMap()
-        }
-        return knowledgeRepository
-            .findByCodeIn(codes)
-            .toList()
-            .associateBy { it.code }
-    }
+    suspend fun getKnowledgeByCodes(codes: Collection<String>): Map<String, Knowledge> =
+        codes.takeIf { it.isNotEmpty() }
+            ?.let {
+                knowledgeRepository
+                    .findByCodeIn(it)
+                    .toList()
+                    .associateBy { knowledge -> knowledge.code }
+            }
+            ?: emptyMap()
 }

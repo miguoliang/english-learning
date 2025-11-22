@@ -36,13 +36,13 @@ class CardTypeService(
      * @param codes Collection of card type codes
      * @return Map of code to CardType
      */
-    suspend fun getCardTypesByCodes(codes: Collection<String>): Map<String, CardType> {
-        if (codes.isEmpty()) {
-            return emptyMap()
-        }
-        return cardTypeRepository
-            .findByCodeIn(codes)
-            .toList()
-            .associateBy { it.code }
-    }
+    suspend fun getCardTypesByCodes(codes: Collection<String>): Map<String, CardType> =
+        codes.takeIf { it.isNotEmpty() }
+            ?.let {
+                cardTypeRepository
+                    .findByCodeIn(it)
+                    .toList()
+                    .associateBy { cardType -> cardType.code }
+            }
+            ?: emptyMap()
 }

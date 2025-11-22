@@ -66,13 +66,11 @@ class CardTypeController(
         @PathVariable code: String,
     ): ResponseEntity<Any> =
         try {
-            val cardType = cardTypeService.getCardTypeByCode(code)
-            if (cardType == null) {
-                ResponseEntity
+            when (val cardType = cardTypeService.getCardTypeByCode(code)) {
+                null -> ResponseEntity
                     .status(HttpStatus.NOT_FOUND)
                     .body<Any>(ErrorResponseFactory.notFound("CardType", code))
-            } else {
-                ResponseEntity.ok<Any>(cardType.toDto())
+                else -> ResponseEntity.ok<Any>(cardType.toDto())
             }
         } catch (error: Exception) {
             ResponseEntity

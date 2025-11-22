@@ -28,9 +28,10 @@ fun com.miguoliang.englishlearning.model.AccountCard.toDto(
     cardType: CardTypeDto,
     front: String? = null,
     back: String? = null,
-): AccountCardDto =
-    AccountCardDto(
-        id = this.id!!,
+): AccountCardDto {
+    require(id != null) { "AccountCard must have an ID to convert to DTO" }
+    return AccountCardDto(
+        id = id,
         knowledge = knowledge,
         cardType = cardType,
         front = front,
@@ -41,3 +42,4 @@ fun com.miguoliang.englishlearning.model.AccountCard.toDto(
         nextReviewDate = this.nextReviewDate,
         lastReviewedAt = this.lastReviewedAt,
     )
+}

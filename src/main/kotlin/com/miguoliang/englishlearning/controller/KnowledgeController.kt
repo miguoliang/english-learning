@@ -56,13 +56,11 @@ class KnowledgeController(
         @PathVariable code: String,
     ): ResponseEntity<Any> =
         try {
-            val knowledge = knowledgeService.getKnowledgeByCode(code)
-            if (knowledge == null) {
-                ResponseEntity
+            when (val knowledge = knowledgeService.getKnowledgeByCode(code)) {
+                null -> ResponseEntity
                     .status(HttpStatus.NOT_FOUND)
                     .body<Any>(ErrorResponseFactory.notFound("Knowledge", code))
-            } else {
-                ResponseEntity.ok<Any>(knowledge.toDto())
+                else -> ResponseEntity.ok<Any>(knowledge.toDto())
             }
         } catch (error: Exception) {
             ResponseEntity

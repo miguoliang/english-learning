@@ -83,13 +83,10 @@ class AccountCardService(
         cardId: Long,
         quality: Int,
     ): AccountCard {
-        val card =
-            accountCardRepository.findById(cardId)
-                ?: throw IllegalArgumentException("Card not found")
+        val card = accountCardRepository.findById(cardId)
+            ?: error("Card not found")
 
-        if (card.accountId != accountId) {
-            throw IllegalArgumentException("Card does not belong to account")
-        }
+        check(card.accountId == accountId) { "Card does not belong to account" }
 
         // Apply SM-2 algorithm
         val updatedCard =
@@ -104,7 +101,7 @@ class AccountCardService(
         val reviewHistory =
             ReviewHistory(
                 id = null,
-                accountCardId = savedCard.id!!,
+                accountCardId = savedCard.id ?: error("Saved card must have an ID"),
                 quality = quality,
                 reviewedAt = LocalDateTime.now(),
                 createdBy = null,

@@ -29,18 +29,7 @@ class StatsController(
         val accountId = 1L // Placeholder
 
         return try {
-            val statsMap = statsService.getStats(accountId)
-
-            @Suppress("UNCHECKED_CAST")
-            val statsDto =
-                StatsDto(
-                    totalCards = (statsMap["totalCards"] as? Number)?.toLong() ?: 0L,
-                    newCards = (statsMap["newCards"] as? Number)?.toLong() ?: 0L,
-                    learningCards = (statsMap["learningCards"] as? Number)?.toLong() ?: 0L,
-                    dueToday = (statsMap["dueToday"] as? Number)?.toLong() ?: 0L,
-                    byCardType = (statsMap["byCardType"] as? Map<String, Long>) ?: emptyMap(),
-                )
-            ResponseEntity.ok(statsDto)
+            ResponseEntity.ok(statsService.getStats(accountId))
         } catch (error: Exception) {
             ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)

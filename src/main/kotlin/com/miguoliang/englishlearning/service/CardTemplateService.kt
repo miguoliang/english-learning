@@ -145,44 +145,32 @@ class CardTemplateService(
     private fun prepareDataModel(
         knowledge: Knowledge,
         relatedKnowledge: List<Knowledge>,
-    ): Map<String, Any> {
-        val dataModel = mutableMapOf<String, Any>()
-
+    ): Map<String, Any> = buildMap {
         // Add main knowledge fields
-        dataModel["name"] = knowledge.name
-        dataModel["description"] = knowledge.description ?: ""
-        dataModel["code"] = knowledge.code
+        put("name", knowledge.name)
+        put("description", knowledge.description ?: "")
+        put("code", knowledge.code)
 
         // Add metadata as nested map for dot notation access
-        if (knowledge.metadata != null) {
-            val metadataMap = convertMetadataToMap(knowledge.metadata)
-            dataModel["metadata"] = metadataMap
-        } else {
-            dataModel["metadata"] = emptyMap<String, Any>()
-        }
+        put("metadata", knowledge.metadata?.let { convertMetadataToMap(it) } ?: emptyMap<String, Any>())
 
         // Add related knowledge list for iteration
-        val relatedKnowledgeList =
-            relatedKnowledge.map { related ->
-                mapOf(
-                    "code" to related.code,
-                    "name" to related.name,
-                    "description" to (related.description ?: ""),
-                    "metadata" to (related.metadata?.let { convertMetadataToMap(it) } ?: emptyMap<String, Any>()),
-                )
-            }
-        dataModel["relatedKnowledge"] = relatedKnowledgeList
-
-        return dataModel
+        val relatedKnowledgeList = relatedKnowledge.map { related ->
+            mapOf(
+                "code" to related.code,
+                "name" to related.name,
+                "description" to (related.description ?: ""),
+                "metadata" to (related.metadata?.let { convertMetadataToMap(it) } ?: emptyMap<String, Any>()),
+            )
+        }
+        put("relatedKnowledge", relatedKnowledgeList)
     }
 
     /**
      * Converts Metadata object to Map for FreeMarker dot notation access.
      */
-    private fun convertMetadataToMap(metadata: com.miguoliang.englishlearning.model.Metadata): Map<String, Any> {
-        val map = mutableMapOf<String, Any>()
-        metadata.level?.let { map["level"] = it }
-        // Add more metadata fields as they are added to Metadata class
-        return map
-    }
+    private fun convertMetadataToMap(metadata: com.miguoliang.englishlearning.model.Metadata): Map<String, Any> =
+        buildMap {
+            metadata.level?.let { put("level", it) }
+        }
 }

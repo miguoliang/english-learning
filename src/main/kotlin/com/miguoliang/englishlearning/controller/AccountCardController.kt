@@ -308,7 +308,7 @@ class AccountCardController(
         val accountId = 1L // Placeholder
 
         // Validate quality range
-        if (request.quality < 0 || request.quality > 5) {
+        if (request.quality !in 0..5) {
             return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponseFactory.badRequest("Quality must be between 0 and 5"))
