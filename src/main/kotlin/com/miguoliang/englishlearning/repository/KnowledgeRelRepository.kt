@@ -1,19 +1,18 @@
 package com.miguoliang.englishlearning.repository
 
 import com.miguoliang.englishlearning.model.KnowledgeRel
-import org.springframework.data.repository.reactive.ReactiveCrudRepository
+import kotlinx.coroutines.flow.Flow
+import org.springframework.data.repository.kotlin.CoroutineCrudRepository
 import org.springframework.stereotype.Repository
-import reactor.core.publisher.Flux
-import reactor.core.publisher.Mono
 
 @Repository
-interface KnowledgeRelRepository : ReactiveCrudRepository<KnowledgeRel, Long> {
-    fun findBySourceKnowledgeCode(sourceKnowledgeCode: String): Flux<KnowledgeRel>
+interface KnowledgeRelRepository : CoroutineCrudRepository<KnowledgeRel, Long> {
+    fun findBySourceKnowledgeCode(sourceKnowledgeCode: String): Flow<KnowledgeRel>
 
-    fun findByTargetKnowledgeCode(targetKnowledgeCode: String): Flux<KnowledgeRel>
+    fun findByTargetKnowledgeCode(targetKnowledgeCode: String): Flow<KnowledgeRel>
 
-    fun findBySourceKnowledgeCodeAndTargetKnowledgeCode(
+    suspend fun findBySourceKnowledgeCodeAndTargetKnowledgeCode(
         sourceKnowledgeCode: String,
         targetKnowledgeCode: String,
-    ): Mono<KnowledgeRel>
+    ): KnowledgeRel?
 }

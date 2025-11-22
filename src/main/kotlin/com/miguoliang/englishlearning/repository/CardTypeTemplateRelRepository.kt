@@ -1,19 +1,18 @@
 package com.miguoliang.englishlearning.repository
 
 import com.miguoliang.englishlearning.model.CardTypeTemplateRel
-import org.springframework.data.repository.reactive.ReactiveCrudRepository
+import kotlinx.coroutines.flow.Flow
+import org.springframework.data.repository.kotlin.CoroutineCrudRepository
 import org.springframework.stereotype.Repository
-import reactor.core.publisher.Flux
-import reactor.core.publisher.Mono
 
 @Repository
-interface CardTypeTemplateRelRepository : ReactiveCrudRepository<CardTypeTemplateRel, Long> {
-    fun findByCardTypeCode(cardTypeCode: String): Flux<CardTypeTemplateRel>
+interface CardTypeTemplateRelRepository : CoroutineCrudRepository<CardTypeTemplateRel, Long> {
+    fun findByCardTypeCode(cardTypeCode: String): Flow<CardTypeTemplateRel>
 
-    fun findByTemplateCode(templateCode: String): Flux<CardTypeTemplateRel>
+    fun findByTemplateCode(templateCode: String): Flow<CardTypeTemplateRel>
 
-    fun findByCardTypeCodeAndRole(
+    suspend fun findByCardTypeCodeAndRole(
         cardTypeCode: String,
         role: String,
-    ): Mono<CardTypeTemplateRel>
+    ): CardTypeTemplateRel?
 }

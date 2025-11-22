@@ -1,18 +1,17 @@
 package com.miguoliang.englishlearning.repository
 
 import com.miguoliang.englishlearning.model.CardType
+import kotlinx.coroutines.flow.Flow
 import org.springframework.data.r2dbc.repository.Query
-import org.springframework.data.repository.reactive.ReactiveCrudRepository
+import org.springframework.data.repository.kotlin.CoroutineCrudRepository
 import org.springframework.stereotype.Repository
-import reactor.core.publisher.Flux
-import reactor.core.publisher.Mono
 
 @Repository
-interface CardTypeRepository : ReactiveCrudRepository<CardType, String> {
-    fun findByCode(code: String): Mono<CardType>
+interface CardTypeRepository : CoroutineCrudRepository<CardType, String> {
+    suspend fun findByCode(code: String): CardType?
 
-    fun findByName(name: String): Mono<CardType>
+    suspend fun findByName(name: String): CardType?
 
     @Query("SELECT * FROM card_types WHERE code IN (:codes)")
-    fun findByCodeIn(codes: Collection<String>): Flux<CardType>
+    fun findByCodeIn(codes: Collection<String>): Flow<CardType>
 }

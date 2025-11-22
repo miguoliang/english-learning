@@ -2,10 +2,10 @@ package com.miguoliang.englishlearning.service
 
 import com.miguoliang.englishlearning.model.Knowledge
 import com.miguoliang.englishlearning.repository.KnowledgeRepository
+import kotlinx.coroutines.flow.toList
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
-import reactor.core.publisher.Mono
 
 /**
  * Manages knowledge operations.
@@ -13,23 +13,23 @@ import reactor.core.publisher.Mono
 @Service
 class KnowledgeService(
     private val knowledgeRepository: KnowledgeRepository,
-    private val paginationHelper: ReactivePaginationHelper,
+    private val paginationHelper: PaginationHelper,
 ) {
     /**
      * List knowledge items with pagination.
-     * 
+     *
      * @param pageable Pagination parameters
      * @param filter Optional filter expression (not implemented in MVP)
-     * @return Mono containing Page of Knowledge items
+     * @return Page of Knowledge items
      */
-    fun getKnowledge(
+    suspend fun getKnowledge(
         pageable: Pageable,
         filter: String? = null,
-    ): Mono<Page<Knowledge>> {
+    ): Page<Knowledge> {
         // TODO: Implement filter support for metadata queries
         return paginationHelper.paginate(
             knowledgeRepository.findAllOrderedByCode(pageable),
-            knowledgeRepository.count(),
+            { knowledgeRepository.count() },
             pageable,
         )
     }
@@ -38,22 +38,23 @@ class KnowledgeService(
      * Get single knowledge item by code.
      *
      * @param code Knowledge code identifier
-     * @return Mono containing Knowledge or empty if not found
+     * @return Knowledge or null if not found
      */
-    fun getKnowledgeByCode(code: String): Mono<Knowledge> = knowledgeRepository.findByCode(code)
+    suspend fun getKnowledgeByCode(code: String): Knowledge? = knowledgeRepository.findByCode(code)
 
     /**
      * Batch load knowledge items by codes.
      *
      * @param codes Collection of knowledge codes
-     * @return Mono containing Map of code to Knowledge
+     * @return Map of code to Knowledge
      */
-    fun getKnowledgeByCodes(codes: Collection<String>): Mono<Map<String, Knowledge>> {
+    suspend fun getKnowledgeByCodes(codes: Collection<String>): Map<String, Knowledge> {
         if (codes.isEmpty()) {
-            return Mono.just(emptyMap())
+            return emptyMap()
         }
         return knowledgeRepository
             .findByCodeIn(codes)
-            .collectMap { it.code }
+            .toList()
+            .associateBy { it.code }
     }
 }

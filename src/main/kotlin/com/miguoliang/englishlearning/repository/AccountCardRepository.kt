@@ -1,17 +1,16 @@
 package com.miguoliang.englishlearning.repository
 
 import com.miguoliang.englishlearning.model.AccountCard
+import kotlinx.coroutines.flow.Flow
 import org.springframework.data.domain.Pageable
 import org.springframework.data.r2dbc.repository.Query
-import org.springframework.data.repository.reactive.ReactiveCrudRepository
+import org.springframework.data.repository.kotlin.CoroutineCrudRepository
 import org.springframework.stereotype.Repository
-import reactor.core.publisher.Flux
-import reactor.core.publisher.Mono
 import java.time.LocalDateTime
 
 @Repository
-interface AccountCardRepository : ReactiveCrudRepository<AccountCard, Long> {
-    fun findByAccountId(accountId: Long): Flux<AccountCard>
+interface AccountCardRepository : CoroutineCrudRepository<AccountCard, Long> {
+    fun findByAccountId(accountId: Long): Flow<AccountCard>
 
     @Query(
         "SELECT * FROM account_cards WHERE account_id = :accountId AND next_review_date <= :date ORDER BY next_review_date OFFSET :#{#pageable.offset} LIMIT :#{#pageable.pageSize}",
@@ -20,13 +19,13 @@ interface AccountCardRepository : ReactiveCrudRepository<AccountCard, Long> {
         accountId: Long,
         date: LocalDateTime,
         pageable: Pageable,
-    ): Flux<AccountCard>
+    ): Flow<AccountCard>
 
     @Query("SELECT COUNT(*) FROM account_cards WHERE account_id = :accountId AND next_review_date <= :date")
-    fun countDueCardsByAccountId(
+    suspend fun countDueCardsByAccountId(
         accountId: Long,
         date: LocalDateTime,
-    ): Mono<Long>
+    ): Long
 
     @Query(
         "SELECT * FROM account_cards WHERE account_id = :accountId AND next_review_date <= :date AND card_type_code = :cardTypeCode ORDER BY next_review_date OFFSET :#{#pageable.offset} LIMIT :#{#pageable.pageSize}",
@@ -36,22 +35,22 @@ interface AccountCardRepository : ReactiveCrudRepository<AccountCard, Long> {
         date: LocalDateTime,
         cardTypeCode: String,
         pageable: Pageable,
-    ): Flux<AccountCard>
+    ): Flow<AccountCard>
 
     @Query(
         "SELECT COUNT(*) FROM account_cards WHERE account_id = :accountId AND next_review_date <= :date AND card_type_code = :cardTypeCode",
     )
-    fun countDueCardsByAccountIdAndCardTypeCode(
+    suspend fun countDueCardsByAccountIdAndCardTypeCode(
         accountId: Long,
         date: LocalDateTime,
         cardTypeCode: String,
-    ): Mono<Long>
+    ): Long
 
-    fun findByAccountIdAndKnowledgeCodeAndCardTypeCode(
+    suspend fun findByAccountIdAndKnowledgeCodeAndCardTypeCode(
         accountId: Long,
         knowledgeCode: String,
         cardTypeCode: String,
-    ): Mono<AccountCard>
+    ): AccountCard?
 
     @Query(
         "SELECT * FROM account_cards WHERE account_id = :accountId ORDER BY id OFFSET :#{#pageable.offset} LIMIT :#{#pageable.pageSize}",
@@ -59,10 +58,10 @@ interface AccountCardRepository : ReactiveCrudRepository<AccountCard, Long> {
     fun findByAccountId(
         accountId: Long,
         pageable: Pageable,
-    ): Flux<AccountCard>
+    ): Flow<AccountCard>
 
     @Query("SELECT COUNT(*) FROM account_cards WHERE account_id = :accountId")
-    fun countByAccountId(accountId: Long): Mono<Long>
+    suspend fun countByAccountId(accountId: Long): Long
 
     @Query(
         "SELECT * FROM account_cards WHERE account_id = :accountId AND card_type_code = :cardTypeCode ORDER BY id OFFSET :#{#pageable.offset} LIMIT :#{#pageable.pageSize}",
@@ -71,13 +70,13 @@ interface AccountCardRepository : ReactiveCrudRepository<AccountCard, Long> {
         accountId: Long,
         cardTypeCode: String,
         pageable: Pageable,
-    ): Flux<AccountCard>
+    ): Flow<AccountCard>
 
     @Query("SELECT COUNT(*) FROM account_cards WHERE account_id = :accountId AND card_type_code = :cardTypeCode")
-    fun countByAccountIdAndCardTypeCode(
+    suspend fun countByAccountIdAndCardTypeCode(
         accountId: Long,
         cardTypeCode: String,
-    ): Mono<Long>
+    ): Long
 
     @Query(
         "SELECT * FROM account_cards WHERE account_id = :accountId AND repetitions = 0 ORDER BY id OFFSET :#{#pageable.offset} LIMIT :#{#pageable.pageSize}",
@@ -85,10 +84,10 @@ interface AccountCardRepository : ReactiveCrudRepository<AccountCard, Long> {
     fun findByAccountIdAndStatusNew(
         accountId: Long,
         pageable: Pageable,
-    ): Flux<AccountCard>
+    ): Flow<AccountCard>
 
     @Query("SELECT COUNT(*) FROM account_cards WHERE account_id = :accountId AND repetitions = 0")
-    fun countByAccountIdAndStatusNew(accountId: Long): Mono<Long>
+    suspend fun countByAccountIdAndStatusNew(accountId: Long): Long
 
     @Query(
         "SELECT * FROM account_cards WHERE account_id = :accountId AND repetitions > 0 AND repetitions < 3 ORDER BY id OFFSET :#{#pageable.offset} LIMIT :#{#pageable.pageSize}",
@@ -96,10 +95,10 @@ interface AccountCardRepository : ReactiveCrudRepository<AccountCard, Long> {
     fun findByAccountIdAndStatusLearning(
         accountId: Long,
         pageable: Pageable,
-    ): Flux<AccountCard>
+    ): Flow<AccountCard>
 
     @Query("SELECT COUNT(*) FROM account_cards WHERE account_id = :accountId AND repetitions > 0 AND repetitions < 3")
-    fun countByAccountIdAndStatusLearning(accountId: Long): Mono<Long>
+    suspend fun countByAccountIdAndStatusLearning(accountId: Long): Long
 
     @Query(
         "SELECT * FROM account_cards WHERE account_id = :accountId AND next_review_date <= :date ORDER BY id OFFSET :#{#pageable.offset} LIMIT :#{#pageable.pageSize}",
@@ -108,13 +107,13 @@ interface AccountCardRepository : ReactiveCrudRepository<AccountCard, Long> {
         accountId: Long,
         date: LocalDateTime,
         pageable: Pageable,
-    ): Flux<AccountCard>
+    ): Flow<AccountCard>
 
     @Query("SELECT COUNT(*) FROM account_cards WHERE account_id = :accountId AND next_review_date <= :date")
-    fun countByAccountIdAndStatusReview(
+    suspend fun countByAccountIdAndStatusReview(
         accountId: Long,
         date: LocalDateTime,
-    ): Mono<Long>
+    ): Long
 
     @Query(
         "SELECT * FROM account_cards WHERE account_id = :accountId AND card_type_code = :cardTypeCode AND repetitions = 0 ORDER BY id OFFSET :#{#pageable.offset} LIMIT :#{#pageable.pageSize}",
@@ -123,15 +122,15 @@ interface AccountCardRepository : ReactiveCrudRepository<AccountCard, Long> {
         accountId: Long,
         cardTypeCode: String,
         pageable: Pageable,
-    ): Flux<AccountCard>
+    ): Flow<AccountCard>
 
     @Query(
         "SELECT COUNT(*) FROM account_cards WHERE account_id = :accountId AND card_type_code = :cardTypeCode AND repetitions = 0",
     )
-    fun countByAccountIdAndCardTypeCodeAndStatusNew(
+    suspend fun countByAccountIdAndCardTypeCodeAndStatusNew(
         accountId: Long,
         cardTypeCode: String,
-    ): Mono<Long>
+    ): Long
 
     @Query(
         "SELECT * FROM account_cards WHERE account_id = :accountId AND card_type_code = :cardTypeCode AND repetitions > 0 AND repetitions < 3 ORDER BY id OFFSET :#{#pageable.offset} LIMIT :#{#pageable.pageSize}",
@@ -140,15 +139,15 @@ interface AccountCardRepository : ReactiveCrudRepository<AccountCard, Long> {
         accountId: Long,
         cardTypeCode: String,
         pageable: Pageable,
-    ): Flux<AccountCard>
+    ): Flow<AccountCard>
 
     @Query(
         "SELECT COUNT(*) FROM account_cards WHERE account_id = :accountId AND card_type_code = :cardTypeCode AND repetitions > 0 AND repetitions < 3",
     )
-    fun countByAccountIdAndCardTypeCodeAndStatusLearning(
+    suspend fun countByAccountIdAndCardTypeCodeAndStatusLearning(
         accountId: Long,
         cardTypeCode: String,
-    ): Mono<Long>
+    ): Long
 
     @Query(
         "SELECT * FROM account_cards WHERE account_id = :accountId AND card_type_code = :cardTypeCode AND next_review_date <= :date ORDER BY id OFFSET :#{#pageable.offset} LIMIT :#{#pageable.pageSize}",
@@ -158,14 +157,14 @@ interface AccountCardRepository : ReactiveCrudRepository<AccountCard, Long> {
         cardTypeCode: String,
         date: LocalDateTime,
         pageable: Pageable,
-    ): Flux<AccountCard>
+    ): Flow<AccountCard>
 
     @Query(
         "SELECT COUNT(*) FROM account_cards WHERE account_id = :accountId AND card_type_code = :cardTypeCode AND next_review_date <= :date",
     )
-    fun countByAccountIdAndCardTypeCodeAndStatusReview(
+    suspend fun countByAccountIdAndCardTypeCodeAndStatusReview(
         accountId: Long,
         cardTypeCode: String,
         date: LocalDateTime,
-    ): Mono<Long>
+    ): Long
 }

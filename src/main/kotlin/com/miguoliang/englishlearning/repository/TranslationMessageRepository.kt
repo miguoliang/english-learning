@@ -1,19 +1,18 @@
 package com.miguoliang.englishlearning.repository
 
 import com.miguoliang.englishlearning.model.TranslationMessage
-import org.springframework.data.repository.reactive.ReactiveCrudRepository
+import kotlinx.coroutines.flow.Flow
+import org.springframework.data.repository.kotlin.CoroutineCrudRepository
 import org.springframework.stereotype.Repository
-import reactor.core.publisher.Flux
-import reactor.core.publisher.Mono
 
 @Repository
-interface TranslationMessageRepository : ReactiveCrudRepository<TranslationMessage, String> {
-    fun findByTranslationKeyCode(translationKeyCode: String): Flux<TranslationMessage>
+interface TranslationMessageRepository : CoroutineCrudRepository<TranslationMessage, String> {
+    fun findByTranslationKeyCode(translationKeyCode: String): Flow<TranslationMessage>
 
-    fun findByTranslationKeyCodeAndLocaleCode(
+    suspend fun findByTranslationKeyCodeAndLocaleCode(
         translationKeyCode: String,
         localeCode: String,
-    ): Mono<TranslationMessage>
+    ): TranslationMessage?
 
-    fun findByLocaleCode(localeCode: String): Flux<TranslationMessage>
+    fun findByLocaleCode(localeCode: String): Flow<TranslationMessage>
 }
