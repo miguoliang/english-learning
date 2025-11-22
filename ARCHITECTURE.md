@@ -164,6 +164,7 @@ A Spring Boot reactive backend application for English knowledge learning with s
 - **Database**: PostgreSQL with R2DBC (reactive database access)
 - **Migration**: Flyway
 - **Workflow Engine**: Temporal (for heavy, multi-step workflows)
+- **Template Engine**: FreeMarker (for card content rendering)
 - **Language**: Kotlin
 - **Build**: Gradle with Kotlin DSL
 
@@ -352,8 +353,8 @@ All database fields use the following standardized semantic data type definition
 | `id` | `BIGSERIAL` | `Long` | Auto-increment primary keys |
 | `decimal` | `DECIMAL(5,2)` | `BigDecimal` | Decimal numeric values (e.g., ease_factor) |
 | `integer` | `INTEGER` | `Int` | Integer numeric values (interval_days, repetitions, quality) |
-| `datetime` | `TIMESTAMP` | `LocalDateTime` | Date-time fields with time parts (next_review_date) |
-| `utc_time` | `TIMESTAMP` | `Instant` | UTC timestamp fields (created_at, updated_at, reviewed_at, last_reviewed_at) |
+| `local_time` | `TIMESTAMP` | `LocalDateTime` | Date-time fields with time parts (next_review_date, last_reviewed_at, reviewed_at) |
+| `utc_time` | `TIMESTAMP` | `Instant` | UTC timestamp fields (created_at, updated_at) |
 | `jsonb` | `JSONB` | `String` | JSON metadata (requires custom converter) |
 
 **Implementation Notes**:
@@ -411,7 +412,7 @@ Learning unit with common fields: code (immutable primary key), name, descriptio
 Junction table for many-to-many self-referential relationship between knowledge items. Links knowledge items to other knowledge items for various reasons. Uses `source_knowledge_code` and `target_knowledge_code` to reference knowledge items. Constraint: source_knowledge_code cannot equal target_knowledge_code (no self-references).
 
 #### 3. `templates`
-Reusable templates for rendering card content. Includes format field (short_string type) to specify template format and content field (blob type) for template content. Templates support variables like {{name}}, {{description}}, {{metadata}}, and {{#related_knowledge}}. Metadata can be accessed via JSON path operators (e.g., {{metadata.key}}). A template's usage role (e.g., "front", "back", or custom roles) is determined by how it's referenced in card_type_template_rel, not by a type field. Templates can be reused across different card types in different roles for flexibility. Uses immutable code (format: `ST-0000001` for standard templates) as primary key since templates are predefined.
+Reusable templates for rendering card content using FreeMarker template engine. Includes format field (short_string type) to specify template format - currently supports `ftl` (FreeMarker Template Language). Content field (blob type) stores the template content in FreeMarker syntax. Templates support FreeMarker variables and expressions (e.g., `${name}`, `${description}`, `${metadata.level}`, `<#list relatedKnowledge as item>...${item.name}...</#list>`). Metadata can be accessed via dot notation (e.g., `${metadata.level}` or `${metadata.nested.key}`). A template's usage role (e.g., "front", "back", or custom roles) is determined by how it's referenced in card_type_template_rel, not by a type field. Templates can be reused across different card types in different roles for flexibility. Uses immutable code (format: `ST-0000001` for standard templates) as primary key since templates are predefined.
 
 #### 3. `card_types`
 Predefined card patterns that reference templates for rendering. Each card type defines a learning pattern (e.g., "word_to_definition", "definition_to_word") and can reference multiple templates in different roles (e.g., "front", "back", or custom roles). Uses immutable code (format: `ST-0000001` for standard card types) as primary key since card types are predefined.
@@ -468,8 +469,8 @@ erDiagram
         code code PK "Immutable code (ST-0000001)"
         short_string name UK "Unique template name"
         long_string description "Template description"
-        short_string format "Template format"
-        blob content "Template content with variables"
+        short_string format "Template format (e.g., ftl for FreeMarker)"
+        blob content "Template content in FreeMarker syntax"
     }
     
     card_types {
@@ -498,15 +499,15 @@ erDiagram
         decimal ease_factor "SM-2 ease factor"
         integer interval_days "Current interval in days"
         integer repetitions "Number of successful reviews"
-        datetime next_review_date "When card is due for review"
-        datetime last_reviewed_at "Last review timestamp"
+        local_time next_review_date "When card is due for review"
+        local_time last_reviewed_at "Last review timestamp"
     }
     
     review_history {
         id id PK "Auto-increment primary key"
         id account_card_id FK "Reference to account card"
         integer quality "SM-2 quality rating (0-5)"
-        datetime reviewed_at "Review timestamp"
+        local_time reviewed_at "Review timestamp"
     }
 ```
 
@@ -573,6 +574,212 @@ This API follows:
 - **Unified API with Role-Based Access**: Single API surface with access control via headers
 
 ### Base Path: `/api/v1`
+
+### Workflow Endpoints (Generic)
+
+All workflow-related operations use generic endpoints that work for any workflow type. Business-specific endpoints trigger workflows but status and signals are managed through generic workflow APIs.
+
+#### `GET /api/v1/workflows/{workflowId}/status`
+Get the status and results of any workflow execution.
+
+**Headers**:
+- `Authorization: Bearer <token>` (required, token must have appropriate role claim)
+
+**Path Parameters**:
+- `workflowId` (required): Workflow execution ID returned from workflow trigger endpoint
+
+**Response**: `200 OK`
+```json
+{
+  "workflowId": "uuid-string",
+  "workflowExecutionId": "workflow-execution-id",
+  "runId": "run-id",
+  "workflowType": "KnowledgeImportWorkflow",
+  "status": "RUNNING",
+  "executionStatus": "RUNNING",
+  "startedAt": "2024-01-01T12:00:00Z",
+  "closedAt": null,
+  "historyLength": 15,
+  "currentActivity": "validation",
+  "progress": {
+    "currentStep": "Validation",
+    "completedSteps": ["Upload"],
+    "totalSteps": 4
+  },
+  "queryResults": {
+    "validationResults": {
+      "total": 100,
+      "valid": 95,
+      "errors": 5,
+      "errors": [
+        { "row": 10, "field": "name", "message": "Name cannot be empty" }
+      ]
+    },
+    "comparisonResults": null
+  },
+  "result": null,
+  "failure": null
+}
+```
+
+**Status Values**:
+- `RUNNING`: Workflow is currently executing
+- `COMPLETED`: Workflow completed successfully
+- `FAILED`: Workflow failed with an error
+- `CANCELED`: Workflow was canceled
+- `TERMINATED`: Workflow was terminated
+- `TIMED_OUT`: Workflow timed out
+- `CONTINUED_AS_NEW`: Workflow continued as new execution
+
+**Query Results** (available via Temporal Query feature, workflow-specific):
+- Workflow-specific query handlers expose internal state
+- Examples: `validationResults`, `comparisonResults`, `progress`, `currentActivity`
+- Query names and results vary by workflow type
+
+**When Status is COMPLETED**:
+```json
+{
+  "workflowId": "uuid-string",
+  "workflowType": "KnowledgeImportWorkflow",
+  "status": "COMPLETED",
+  "executionStatus": "COMPLETED",
+  "startedAt": "2024-01-01T12:00:00Z",
+  "closedAt": "2024-01-01T12:05:00Z",
+  "result": {
+    "summary": {
+      "total": 100,
+      "new": 20,
+      "updated": 15,
+      "unchanged": 60,
+      "deleted": 5
+    },
+    "generatedCodes": [
+      "ST-0000001",
+      "ST-0000002",
+      ...
+    ]
+  }
+}
+```
+
+**When Status is FAILED**:
+```json
+{
+  "workflowId": "uuid-string",
+  "workflowType": "KnowledgeImportWorkflow",
+  "status": "FAILED",
+  "executionStatus": "FAILED",
+  "startedAt": "2024-01-01T12:00:00Z",
+  "closedAt": "2024-01-01T12:02:00Z",
+  "failure": {
+    "message": "Validation failed: Invalid CSV format",
+    "type": "ApplicationFailure",
+    "cause": "CSV parsing error at line 10",
+    "stackTrace": "..."
+  }
+}
+```
+
+**Errors**:
+- `401 Unauthorized`: Missing or invalid token
+- `404 Not Found`: Workflow not found
+- `400 Bad Request`: Invalid workflow ID format
+
+#### `POST /api/v1/workflows/{workflowId}/signal`
+Send a signal to a running workflow.
+
+**Headers**:
+- `Authorization: Bearer <token>` (required, token must have appropriate role claim)
+
+**Path Parameters**:
+- `workflowId` (required): Workflow execution ID
+
+**Request Body**:
+```json
+{
+  "signalName": "approval",
+  "signalData": {
+    "approved": true,
+    "reason": "Optional reason for approval/rejection"
+  }
+}
+```
+
+**Response**: `200 OK`
+```json
+{
+  "workflowId": "uuid-string",
+  "signalName": "approval",
+  "signalSent": true,
+  "timestamp": "2024-01-01T12:00:00Z"
+}
+```
+
+**Note**: Signal names and data structure are workflow-specific. The workflow must be waiting for this signal type.
+
+**Errors**:
+- `401 Unauthorized`: Missing or invalid token
+- `404 Not Found`: Workflow not found or already completed
+- `400 Bad Request`: Invalid workflow ID format or workflow not in waiting state
+
+#### `GET /api/v1/workflows`
+List workflows with optional filtering.
+
+**Headers**:
+- `Authorization: Bearer <token>` (required, token must have appropriate role claim)
+
+**Query Parameters**:
+- `workflowType` (optional): Filter by workflow type (e.g., `KnowledgeImportWorkflow`, `CardInitializationWorkflow`)
+- `status` (optional): Filter by execution status (`RUNNING`, `COMPLETED`, `FAILED`, etc.)
+- `page` (optional, default: 0): Page number (0-indexed)
+- `size` (optional, default: 20, max: 100): Number of items per page
+
+**Response**: `200 OK`
+```json
+{
+  "content": [
+    {
+      "workflowId": "uuid-string",
+      "workflowType": "KnowledgeImportWorkflow",
+      "status": "RUNNING",
+      "startedAt": "2024-01-01T12:00:00Z"
+    }
+  ],
+  "page": {
+    "number": 0,
+    "size": 20,
+    "totalElements": 5,
+    "totalPages": 1
+  }
+}
+```
+
+**Errors**:
+- `401 Unauthorized`: Missing or invalid token
+- `400 Bad Request`: Invalid size > 100 or invalid status value
+
+#### `POST /api/v1/workflows/{workflowId}/cancel`
+Cancel a running workflow.
+
+**Headers**:
+- `Authorization: Bearer <token>` (required, token must have appropriate role claim)
+
+**Path Parameters**:
+- `workflowId` (required): Workflow execution ID
+
+**Response**: `200 OK`
+```json
+{
+  "workflowId": "uuid-string",
+  "canceled": true,
+  "timestamp": "2024-01-01T12:00:00Z"
+}
+```
+
+**Errors**:
+- `401 Unauthorized`: Missing or invalid token
+- `404 Not Found`: Workflow not found
+- `400 Bad Request`: Workflow already completed or cannot be canceled
 
 ### Resource Naming Conventions
 
@@ -745,130 +952,25 @@ ST-0000003,Another Updated,Another Description,B1,idiom
 **Response**: `202 Accepted`
 ```json
 {
-  "sessionId": "uuid-string",
-  "status": "pending_validation",
-  "uploadedAt": "2024-01-01T12:00:00Z"
+  "workflowId": "uuid-string",
+  "workflowExecutionId": "workflow-execution-id",
+  "runId": "run-id",
+  "status": "RUNNING",
+  "startedAt": "2024-01-01T12:00:00Z"
 }
 ```
+
+**Note**: Returns workflow execution information. Use `workflowId` to query status later.
 
 **Errors**:
 - `401 Unauthorized`: Missing or invalid token
 - `403 Forbidden`: Token does not have `operator` role claim
 - `400 Bad Request`: Invalid CSV format or missing required columns
 
-#### `POST /api/v1/knowledge:validate`
-Validate uploaded CSV and compare with existing data.
-
-**Headers**:
-- `Authorization: Bearer <token>` (required, token must have `role: operator` claim)
-
-**Request Body**:
-```json
-{
-  "sessionId": "uuid-string"
-}
-```
-
-**Response**: `200 OK`
-```json
-{
-  "sessionId": "uuid-string",
-  "status": "validated",
-  "summary": {
-    "total": 100,
-    "new": 20,
-    "updated": 15,
-    "unchanged": 60,
-    "deleted": 5,
-    "errors": 0
-  },
-  "changes": {
-    "new": [
-      { "name": "New Item", "description": "...", "metadata": {"level": "A1", "type": "vocabulary"} }
-    ],
-    "updated": [
-      { "code": "ST-0000002", "old": {...}, "new": {...} }
-    ],
-    "unchanged": [
-      { "code": "ST-0000003", "name": "Existing Item", ... }
-    ],
-    "deleted": ["ST-0000005"]
-  },
-  "errors": []
-}
-```
-
 **Note**: 
-- New items (code column was empty) do not include codes in response. Codes will be generated after approval.
-- Updated/unchanged items (code column was filled) include their codes.
-- Metadata columns with `metadata:` prefix are converted to JSONB object in database.
-
-**Errors**:
-- `401 Unauthorized`: Missing or invalid token
-- `403 Forbidden`: Token does not have `operator` role claim
-- `404 Not Found`: Import session not found
-- `400 Bad Request`: Session not in valid state for validation
-
-#### `POST /api/v1/knowledge:approve`
-Approve or reject validated import changes.
-
-**Headers**:
-- `Authorization: Bearer <token>` (required, token must have `role: operator` claim)
-
-**Request Body** (approve):
-```json
-{
-  "sessionId": "uuid-string",
-  "approved": true
-}
-```
-
-**Request Body** (reject):
-```json
-{
-  "sessionId": "uuid-string",
-  "approved": false,
-  "reason": "Reason for rejection"
-}
-```
-
-**Response** (approve): `200 OK`
-```json
-{
-  "sessionId": "uuid-string",
-  "status": "approved",
-  "applied": {
-    "new": 20,
-    "updated": 15,
-    "deleted": 5
-  },
-  "generatedCodes": [
-    { "name": "New Item 1", "code": "ST-0000001" },
-    { "name": "New Item 2", "code": "ST-0000002" }
-  ],
-  "approvedAt": "2024-01-01T12:00:00Z",
-  "approvedBy": "operator-id"
-}
-```
-
-**Note**: `generatedCodes` array contains the codes that were automatically generated for new items during approval.
-
-**Response** (reject): `200 OK`
-```json
-{
-  "sessionId": "uuid-string",
-  "status": "rejected",
-  "rejectedAt": "2024-01-01T12:00:00Z",
-  "rejectedBy": "operator-id",
-  "reason": "Reason for rejection"
-}
-```
-
-**Errors**:
-- `401 Unauthorized`: Missing or invalid token
-- `403 Forbidden`: Token does not have `operator` role claim
-- `404 Not Found`: Import session not found
-- `400 Bad Request`: Session not in `validated` status or invalid request body
+- Validation and approval are handled by the Temporal workflow automatically
+- Use `GET /api/v1/workflows/{workflowId}/status` to check validation and comparison results
+- Use `POST /api/v1/workflows/{workflowId}/signal` with signal name `approval` to approve/reject changes
 
 ### Card Types Endpoints
 
@@ -1240,10 +1342,12 @@ Manages template operations.
 - `getAllTemplates()`: List all templates (usage determined by relationships)
 
 #### 3. **CardTemplateService**
-Renders card templates with knowledge data.
-- `renderByRole(cardType, knowledge, role)`: Generates content using template for specified role
+Renders card templates with knowledge data using FreeMarker template engine.
+- `renderByRole(cardType, knowledge, role)`: Generates content using FreeMarker template for specified role
 - Loads templates from database via TemplateService and card_type_template_rel
-- Template variables: `{{name}}`, `{{description}}`, `{{metadata}}`, `{{#related_knowledge}}...{{/related_knowledge}}` (iterates over referenced knowledge entities via knowledge_rel). Metadata can be accessed via JSON path (e.g., `{{metadata.key}}` or `{{metadata.nested.key}}`).
+- Uses FreeMarker Template Language (FTL) syntax: `${name}`, `${description}`, `${metadata.level}`, `<#list relatedKnowledge as item>...${item.name}...</#list>` (iterates over referenced knowledge entities via knowledge_rel)
+- Metadata can be accessed via dot notation (e.g., `${metadata.key}` or `${metadata.nested.key}`)
+- Template format field value is `ftl` for FreeMarker templates
 
 #### 4. **KnowledgeService**
 Manages knowledge operations.
@@ -1254,8 +1358,14 @@ Manages knowledge operations.
 Manages CSV-based batch import/export of knowledge items. Export is a simple operation, while import uses Temporal workflows.
 - `exportAllKnowledge()`: Export all knowledge items to CSV file (returns `Flux<ByteArray>` or `Mono<Resource>`) - Simple operation
 - `uploadCsv(file: MultipartFile, operatorId: String)`: Upload CSV file and start Temporal workflow (returns `Mono<WorkflowExecution>`)
-- `getWorkflowStatus(workflowId: String)`: Get workflow status and results (returns `Mono<WorkflowStatus>`)
-- `approveWorkflow(workflowId: String, approved: Boolean, reason: String?, operatorId: String)`: Send approval signal to workflow (returns `Mono<Void>`)
+
+#### 4.1.1. **WorkflowService** (Generic)
+Generic service for managing all Temporal workflows:
+- `getWorkflowStatus(workflowId: String)`: Get workflow status using Temporal's `DescribeWorkflowExecution` API (returns `Mono<WorkflowStatus>`)
+  - Returns: execution status, start/close times, history length, query results, workflow result, failure details
+- `sendSignal(workflowId: String, signalName: String, signalData: Any)`: Send signal to workflow (returns `Mono<Void>`)
+- `listWorkflows(workflowType: String?, status: String?, pageable: Pageable)`: List workflows with filtering (returns `Mono<Page<WorkflowSummary>>`)
+- `cancelWorkflow(workflowId: String)`: Cancel running workflow (returns `Mono<Void>`)
 
 #### 4.2. **KnowledgeImportWorkflow** (Temporal Workflow)
 Temporal workflow for knowledge import with multiple activities:
@@ -1311,7 +1421,7 @@ Calculates account statistics.
    - Related knowledge items via knowledge_rel junction table
    - Card type and its associated templates via card_type_template_rel (with roles)
    - Templates for each role (e.g., "front", "back", or custom roles)
-5. Service renders content using card templates by role (which may include {{name}}, {{description}}, and {{#related_knowledge}})
+5. Service renders content using FreeMarker templates by role (which may include `${name}`, `${description}`, and `<#list relatedKnowledge>...</#list>`)
 6. Service returns paginated list with rendered `front` and `back` content
 7. Client displays card front to user
 8. User reviews and submits quality: `POST /api/v1/accounts/me/cards/{cardId}:review`
@@ -1389,8 +1499,9 @@ Calculates account statistics.
    - Workflow stores comparison results
 6. **Workflow: Wait for Approval Signal**
    - Workflow waits for operator approval signal
-   - Operator reviews results and approves/rejects: `POST /api/v1/knowledge:approve`
-     - Body: `{ "workflowId": "uuid", "approved": true }`
+   - Operator reviews results via: `GET /api/v1/workflows/{workflowId}/status`
+   - Operator approves/rejects via: `POST /api/v1/workflows/{workflowId}/signal`
+     - Body: `{ "signalName": "approval", "signalData": { "approved": true, "reason": "optional" } }`
 7. **Workflow: Apply Changes Activity** (if approved)
    - Workflow executes `applyChangesActivity()`:
      - Generates codes for new items using `CodeGenerationService`
@@ -1401,26 +1512,30 @@ Calculates account statistics.
      - Provides progress updates
      - Handles retries and error recovery
 8. Workflow completes and notifies system
-9. Operator can query workflow status: `GET /api/v1/knowledge:import-status/{workflowId}`
+9. Operator can query workflow status: `GET /api/v1/workflows/{workflowId}/status`
 
 ### Knowledge Import Approval Flow (Operator) - Temporal Signal
-1. Operator reviews workflow results and approves: `POST /api/v1/knowledge:approve`
+1. Operator reviews workflow results: `GET /api/v1/workflows/{workflowId}/status`
    - Headers: `Authorization: Bearer <token>` (with `role: operator` claim)
-   - Body: `{ "workflowId": "uuid", "approved": true, "reason": "optional" }`
-2. Service validates JWT token and checks for `operator` role
-3. Service sends approval signal to Temporal workflow
-4. Workflow receives signal and continues execution:
+   - Response includes validation and comparison results in `queryResults`
+2. Operator approves/rejects: `POST /api/v1/workflows/{workflowId}/signal`
+   - Headers: `Authorization: Bearer <token>` (with `role: operator` claim)
+   - Body: `{ "signalName": "approval", "signalData": { "approved": true, "reason": "optional" } }`
+3. Service validates JWT token and checks for `operator` role
+4. Service sends approval signal to Temporal workflow
+5. Workflow receives signal and continues execution:
    - If approved: Executes `applyChangesActivity()` (see step 7 in Knowledge Import Flow)
    - If rejected: Workflow completes without changes
-5. Service returns signal acknowledgment: `200 OK`
+6. Service returns signal acknowledgment: `200 OK`
    ```json
    {
      "workflowId": "uuid",
+     "signalName": "approval",
      "signalSent": true,
      "timestamp": "2024-01-01T12:00:00Z"
    }
    ```
-6. Operator can query workflow status to see final results: `GET /api/v1/knowledge:import-status/{workflowId}`
+7. Operator can query workflow status to see final results: `GET /api/v1/workflows/{workflowId}/status`
    ```json
    {
      "sessionId": "uuid",
@@ -1442,22 +1557,14 @@ Calculates account statistics.
 **Note**: Codes (ST-0000001, ST-0000002, etc.) are automatically generated by the system only after approval, not during upload or validation.
 
 ### Knowledge Import Rejection Flow (Operator)
-1. Operator rejects changes: `POST /api/v1/knowledge:approve`
+1. Operator rejects changes: `POST /api/v1/workflows/{workflowId}/signal`
    - Headers: `Authorization: Bearer <token>` (with `role: operator` claim)
-   - Body: `{ "sessionId": "uuid", "approved": false, "reason": "..." }`
+   - Body: `{ "signalName": "approval", "signalData": { "approved": false, "reason": "..." } }`
 2. Service validates JWT token and checks for `operator` role
-3. Service loads import session
-4. Service updates import session status to `rejected` with reason
-5. Service returns rejection result: `200 OK`
-   ```json
-   {
-     "sessionId": "uuid",
-     "status": "rejected",
-     "rejectedAt": "2024-01-01T12:00:00Z",
-     "rejectedBy": "operator-id",
-     "reason": "..."
-   }
-   ```
+3. Service sends rejection signal to Temporal workflow
+4. Workflow receives signal and completes without applying changes
+5. Service returns signal acknowledgment: `200 OK`
+6. Operator can query workflow status to confirm rejection: `GET /api/v1/workflows/{workflowId}/status`
 
 ### Statistics Retrieval Flow (Client)
 1. Client requests statistics: `GET /api/v1/accounts/me/stats`
@@ -1564,11 +1671,12 @@ Data Transfer Objects for API responses:
 ### MVP Constraints
 - No authentication/authorization
 - No caching
-- Simple string-based template rendering (no complex templating engine)
+- FreeMarker template engine for card content rendering (format: `ftl`)
 
 ### Technical Decisions
 - All operations are reactive (Mono/Flux) for non-blocking I/O
 - SM-2 algorithm implemented as pure function object
-- Card templates use simple {{variable}} syntax
+- Card templates use FreeMarker Template Language (FTL) with `${variable}` syntax
+- Template format field value is `ftl` for FreeMarker templates
 - Database uses snake_case, Kotlin uses camelCase (handled by @Column)
 

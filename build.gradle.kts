@@ -39,6 +39,11 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
     implementation("org.springframework:spring-jdbc")
+    // Temporal workflow engine
+    implementation("io.temporal:temporal-sdk:1.24.0")
+    implementation("io.temporal:temporal-kotlin:1.24.0")
+    // FreeMarker template engine
+    implementation("org.freemarker:freemarker:2.3.32")
     compileOnly("org.projectlombok:lombok")
     developmentOnly("org.springframework.boot:spring-boot-devtools")
     runtimeOnly("org.postgresql:postgresql")
@@ -63,7 +68,7 @@ kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_25)
         freeCompilerArgs.addAll(
-            "-Xjvm-default=all"  // For Spring interface defaults
+            "-jvm-default=enable"  // For Spring interface defaults
         )
     }
 }
