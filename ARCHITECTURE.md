@@ -157,15 +157,16 @@ A heavy job with multiple sub-tasks: CSV upload, validation, comparison, and app
 ## Part 2.1: Technology Stack
 
 ### Overview
-A Spring Boot reactive backend application for English knowledge learning with spaced repetition (SM-2 algorithm), supporting knowledge items and predefined card types.
+A Quarkus reactive backend application for English knowledge learning with spaced repetition (SM-2 algorithm), supporting knowledge items and predefined card types.
 
 ### Technology Stack
-- **Framework**: Spring Boot 4.0.0 with WebFlux (reactive)
-- **Database**: PostgreSQL with R2DBC (reactive database access)
+- **Framework**: Quarkus 3.29.4 with Hibernate Reactive
+- **Database**: PostgreSQL with Hibernate Reactive Panache (reactive database access)
 - **Migration**: Flyway
 - **Workflow Engine**: Temporal (for heavy, multi-step workflows)
 - **Template Engine**: FreeMarker (for card content rendering)
-- **Language**: Kotlin
+- **Language**: Kotlin 2.2.21
+- **Java**: Java 21
 - **Build**: Gradle with Kotlin DSL
 
 ---
@@ -234,26 +235,23 @@ A centralized `CodeGenerationService` handles code generation:
 
 **Implementation Pattern**:
 ```kotlin
-@Service
+@ApplicationScoped
 class CodeGenerationService(
-    private val r2dbcEntityTemplate: R2dbcEntityTemplate
+    private val sessionFactory: Mutiny.SessionFactory
 ) {
     suspend fun generateCode(prefix: String): String {
         require(prefix in listOf("ST", "CS")) { "Invalid prefix: $prefix" }
         require(prefix.length == 2) { "Prefix must be exactly 2 characters" }
-        
+
         val sequenceName = "code_seq_${prefix.lowercase()}"
-        val nextValue = r2dbcEntityTemplate.databaseClient
-            .sql("SELECT nextval(:sequenceName)")
-            .bind("sequenceName", sequenceName)
-            .fetch()
-            .one()
-            .map { it["nextval"] as Long }
-            .awaitSingle()
-        
+        val nextValue = sessionFactory.withSession { session ->
+            session.createNativeQuery("SELECT nextval('$sequenceName')", Long::class.java)
+                .singleResult
+        }.awaitSuspending()
+
         val number = nextValue.toString().padStart(7, '0')
         require(number.length <= 7) { "Sequence value exceeds 7 digits" }
-        
+
         return "$prefix-$number"
     }
 }
@@ -1583,7 +1581,7 @@ Calculates account statistics.
 ## Part 2.9: Implementation Details
 
 ### Repository Layer
-All repositories extend `ReactiveCrudRepository` for reactive database access:
+All repositories extend `PanacheRepositoryBase` for reactive database access with Hibernate Reactive:
 
 **Standard Repositories**:
 - `KnowledgeRepository`: CRUD operations + `findAll(Pageable)` for pagination
@@ -1597,55 +1595,48 @@ All repositories extend `ReactiveCrudRepository` for reactive database access:
 - `AccountCardRepository`: CRUD + custom queries for due cards, counts by status, etc.
 - `ReviewHistoryRepository`: CRUD + `findByAccountCardId()`
 
-**R2DBC Pagination Notes**:
-- R2DBC supports `Pageable` as a parameter in repository methods
-- Repository methods return `Flux<T>` (not `Page<T>`) for reactive streams
-- To improve developer experience, use `ReactivePaginationHelper` utility (see below) to simplify pagination
+**Panache Pagination Notes**:
+- Panache supports pagination through `PanacheQuery` interface
+- Repository methods return `Uni<List<T>>` for reactive operations
+- Use Panache's built-in `page()` method for pagination support
 
-#### **ReactivePaginationHelper** (Utility Service)
-A reusable utility service that encapsulates the pagination pattern to improve developer experience:
+#### **Panache Pagination Pattern**
+Panache provides built-in pagination support through the `PanacheQuery` interface:
 
+**Usage in Repositories**:
 ```kotlin
-@Service
-class ReactivePaginationHelper {
-    fun <T> paginate(
-        data: Flux<T>,
-        count: Mono<Long>,
-        pageable: Pageable
-    ): Mono<Page<T>> {
-        return Mono.zip(data.collectList(), count)
-            .map { (items, total) -> 
-                PageImpl(items, pageable, total) 
-            }
+@ApplicationScoped
+class KnowledgeRepository : PanacheRepositoryBase<Knowledge, String> {
+    suspend fun findAllPaginated(pageIndex: Int, pageSize: Int): List<Knowledge> {
+        return findAll()
+            .page(pageIndex, pageSize)
+            .list<Knowledge>()
+            .awaitSuspending()
     }
-    
-    fun <T> paginateWithQuery(
-        dataQuery: Flux<T>,
-        countQuery: Mono<Long>,
-        pageable: Pageable
-    ): Mono<Page<T>> {
-        return paginate(dataQuery, countQuery, pageable)
+
+    suspend fun countAll(): Long {
+        return count().awaitSuspending()
     }
 }
 ```
 
 **Usage in Services**:
 ```kotlin
-fun findAll(pageable: Pageable): Mono<Page<Knowledge>> {
-    return paginationHelper.paginate(
-        repository.findAll(pageable),
-        repository.count(),
-        pageable
-    )
+suspend fun findAll(pageIndex: Int, pageSize: Int): Page<Knowledge> {
+    val items = repository.findAllPaginated(pageIndex, pageSize)
+    val total = repository.countAll()
+    return Page(items, pageIndex, pageSize, total)
 }
 ```
 
-This utility eliminates boilerplate and provides a clean, reusable pattern for pagination across all services.
+Panache's built-in pagination eliminates boilerplate and provides a clean, efficient pattern for database queries.
 
 ### Entity Models
-All entities use Spring Data R2DBC annotations:
+All entities use JPA/Hibernate annotations:
+- `@Entity`: Marks a class as a JPA entity
 - `@Table`: Maps to database table
 - `@Id`: Primary key
+- `@GeneratedValue`: Auto-generation strategy for primary keys
 - `@Column`: Maps to database column (for snake_case conversion)
 
 ### DTOs
@@ -1662,7 +1653,7 @@ Data Transfer Objects for API responses:
 - Request/Response DTOs for each endpoint
 
 ### Configuration
-- `application.yaml`: Database connection, R2DBC, Flyway settings
+- `application.properties`: Database connection, Hibernate Reactive, Flyway settings
 
 ---
 
@@ -1674,9 +1665,10 @@ Data Transfer Objects for API responses:
 - FreeMarker template engine for card content rendering (format: `ftl`)
 
 ### Technical Decisions
-- All operations are reactive (Mono/Flux) for non-blocking I/O
+- All operations are reactive (Mutiny Uni/Multi with Kotlin coroutines) for non-blocking I/O
 - SM-2 algorithm implemented as pure function object
 - Card templates use FreeMarker Template Language (FTL) with `${variable}` syntax
 - Template format field value is `ftl` for FreeMarker templates
 - Database uses snake_case, Kotlin uses camelCase (handled by @Column)
+- Using Kotlin coroutines with `suspend` functions for cleaner reactive code
 
