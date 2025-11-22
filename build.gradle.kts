@@ -124,6 +124,17 @@ ktlint {
     }
 }
 
+// Remove compilation dependencies from ktlint tasks for faster feedback (like JS tooling)
+tasks.matching { it.name.contains("Ktlint") || it.name.startsWith("ktlint") }.configureEach {
+    dependsOn.removeIf { dep ->
+        val name = (dep as? Task)?.name ?: dep.toString()
+        name.contains("compile", ignoreCase = true) ||
+            name.contains("process", ignoreCase = true) ||
+            name.contains("classes", ignoreCase = true) ||
+            name.contains("jar", ignoreCase = true)
+    }
+}
+
 // Quality check task
 tasks.register("qualityCheck") {
     group = "verification"

@@ -30,6 +30,7 @@ class StatsController(
 
         return try {
             val statsMap = statsService.getStats(accountId)
+
             @Suppress("UNCHECKED_CAST")
             val statsDto =
                 StatsDto(
