@@ -1,21 +1,23 @@
 package com.miguoliang.englishlearning.model
 
-import org.springframework.data.annotation.Id
-import org.springframework.data.relational.core.mapping.Column
-import org.springframework.data.relational.core.mapping.Table
+import jakarta.persistence.Column
+import jakarta.persistence.Entity
+import jakarta.persistence.Id
+import jakarta.persistence.Table
 import java.time.LocalDateTime
 
-@Table("review_history")
+@Entity
+@Table(name = "review_history")
 data class ReviewHistory(
     @Id
-    @Column("id")
+    @Column(name = "id")
     val id: Long? = null,
-    @Column("account_card_id")
+    @Column(name = "account_card_id")
     val accountCardId: Long,
-    @Column("quality")
+    @Column(name = "quality")
     val quality: Int,
-    @Column("reviewed_at")
+    @Column(name = "reviewed_at")
     val reviewedAt: LocalDateTime, // Changed to LocalDateTime to match local_time semantic type
-    @Column("created_by")
+    @Column(name = "created_by")
     val createdBy: String?,
 )

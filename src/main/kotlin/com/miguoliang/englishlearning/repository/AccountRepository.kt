@@ -1,10 +1,14 @@
 package com.miguoliang.englishlearning.repository
 
 import com.miguoliang.englishlearning.model.Account
-import org.springframework.data.repository.kotlin.CoroutineCrudRepository
-import org.springframework.stereotype.Repository
+import io.quarkus.hibernate.reactive.panache.PanacheRepository
+import io.smallrye.mutiny.Uni
+import jakarta.enterprise.context.ApplicationScoped
 
-@Repository
-interface AccountRepository : CoroutineCrudRepository<Account, Long> {
-    suspend fun findByUsername(username: String): Account?
+@ApplicationScoped
+class AccountRepository : PanacheRepository<Account> {
+
+    fun findByUsername(username: String): Uni<Account?> {
+        return find("username", username).firstResult()
+    }
 }

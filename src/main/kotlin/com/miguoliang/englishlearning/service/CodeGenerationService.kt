@@ -1,35 +1,36 @@
 package com.miguoliang.englishlearning.service
 
-import kotlinx.coroutines.reactor.awaitSingle
-import org.springframework.r2dbc.core.DatabaseClient
-import org.springframework.stereotype.Service
+import io.smallrye.mutiny.Uni
+import io.vertx.mutiny.pgclient.PgPool
+import io.vertx.mutiny.sqlclient.Row
+import jakarta.enterprise.context.ApplicationScoped
 
-@Service
+@ApplicationScoped
 class CodeGenerationService(
-    private val databaseClient: DatabaseClient,
+    private val pgPool: PgPool,
 ) {
-    suspend fun generateCode(prefix: String): String {
+    fun generateCode(prefix: String): Uni<String> {
         require(prefix in listOf("ST", "CS")) { "Invalid prefix: $prefix. Must be ST or CS" }
         require(prefix.length == 2) { "Prefix must be exactly 2 characters" }
 
         val sequenceName = "code_seq_${prefix.lowercase()}"
 
-        val nextValue =
-            databaseClient
-                .sql("SELECT nextval(:sequenceName)")
-                .bind("sequenceName", sequenceName)
-                .map { row ->
-                    row.get("nextval", Long::class.java) ?: throw IllegalStateException("Sequence returned null")
-                }.one()
-                .awaitSingle()
+        return pgPool
+            .query("SELECT nextval('$sequenceName')")
+            .execute()
+            .map { rowSet ->
+                val row: Row = rowSet.iterator().next()
+                row.getLong(0)
+            }
+            .map { nextValue ->
+                val number = nextValue.toString().padStart(7, '0')
+                require(number.length <= 7) { "Sequence value exceeds 7 digits" }
 
-        val number = nextValue.toString().padStart(7, '0')
-        require(number.length <= 7) { "Sequence value exceeds 7 digits" }
+                val code = "$prefix-$number"
+                require(code.length == 10) { "Generated code must be exactly 10 characters" }
 
-        val code = "$prefix-$number"
-        require(code.length == 10) { "Generated code must be exactly 10 characters" }
-
-        return code
+                code
+            }
     }
 
     fun validateCode(code: String): Boolean {

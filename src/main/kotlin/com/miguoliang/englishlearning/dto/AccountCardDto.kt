@@ -29,9 +29,10 @@ fun com.miguoliang.englishlearning.model.AccountCard.toDto(
     front: String? = null,
     back: String? = null,
 ): AccountCardDto {
-    require(id != null) { "AccountCard must have an ID to convert to DTO" }
+    val cardId = this.id
+    require(cardId != null) { "AccountCard must have an ID to convert to DTO" }
     return AccountCardDto(
-        id = id,
+        id = cardId,
         knowledge = knowledge,
         cardType = cardType,
         front = front,

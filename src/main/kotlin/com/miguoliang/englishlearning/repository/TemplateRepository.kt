@@ -1,12 +1,23 @@
 package com.miguoliang.englishlearning.repository
 
 import com.miguoliang.englishlearning.model.Template
-import org.springframework.data.repository.kotlin.CoroutineCrudRepository
-import org.springframework.stereotype.Repository
+import io.quarkus.hibernate.reactive.panache.PanacheRepositoryBase
+import io.smallrye.mutiny.Multi
+import io.smallrye.mutiny.Uni
+import jakarta.enterprise.context.ApplicationScoped
 
-@Repository
-interface TemplateRepository : CoroutineCrudRepository<Template, String> {
-    suspend fun findByCode(code: String): Template?
+@ApplicationScoped
+class TemplateRepository : PanacheRepositoryBase<Template, String> {
 
-    suspend fun findByName(name: String): Template?
+    fun streamAll(): Multi<Template> {
+        return findAll().stream()
+    }
+
+    fun findByCode(code: String): Uni<Template?> {
+        return findById(code)
+    }
+
+    fun findByName(name: String): Uni<Template?> {
+        return find("name", name).firstResult()
+    }
 }

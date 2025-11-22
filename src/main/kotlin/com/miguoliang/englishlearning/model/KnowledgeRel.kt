@@ -1,25 +1,27 @@
 package com.miguoliang.englishlearning.model
 
-import org.springframework.data.annotation.Id
-import org.springframework.data.relational.core.mapping.Column
-import org.springframework.data.relational.core.mapping.Table
+import jakarta.persistence.Column
+import jakarta.persistence.Entity
+import jakarta.persistence.Id
+import jakarta.persistence.Table
 import java.time.Instant
 
-@Table("knowledge_rel")
+@Entity
+@Table(name = "knowledge_rel")
 data class KnowledgeRel(
     @Id
-    @Column("id")
+    @Column(name = "id")
     val id: Long? = null,
-    @Column("source_knowledge_code")
+    @Column(name = "source_knowledge_code")
     val sourceKnowledgeCode: String,
-    @Column("target_knowledge_code")
+    @Column(name = "target_knowledge_code")
     val targetKnowledgeCode: String,
-    @Column("created_at")
+    @Column(name = "created_at")
     val createdAt: Instant,
-    @Column("updated_at")
+    @Column(name = "updated_at")
     val updatedAt: Instant,
-    @Column("created_by")
+    @Column(name = "created_by")
     val createdBy: String?,
-    @Column("updated_by")
+    @Column(name = "updated_by")
     val updatedBy: String?,
 )

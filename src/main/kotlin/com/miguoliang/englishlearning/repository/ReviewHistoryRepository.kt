@@ -1,11 +1,14 @@
 package com.miguoliang.englishlearning.repository
 
 import com.miguoliang.englishlearning.model.ReviewHistory
-import kotlinx.coroutines.flow.Flow
-import org.springframework.data.repository.kotlin.CoroutineCrudRepository
-import org.springframework.stereotype.Repository
+import io.quarkus.hibernate.reactive.panache.PanacheRepository
+import io.smallrye.mutiny.Multi
+import jakarta.enterprise.context.ApplicationScoped
 
-@Repository
-interface ReviewHistoryRepository : CoroutineCrudRepository<ReviewHistory, Long> {
-    fun findByAccountCardId(accountCardId: Long): Flow<ReviewHistory>
+@ApplicationScoped
+class ReviewHistoryRepository : PanacheRepository<ReviewHistory> {
+
+    fun findByAccountCardId(accountCardId: Long): Multi<ReviewHistory> {
+        return find("accountCardId", accountCardId).stream()
+    }
 }

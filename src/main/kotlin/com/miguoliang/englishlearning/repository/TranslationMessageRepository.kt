@@ -1,18 +1,30 @@
 package com.miguoliang.englishlearning.repository
 
 import com.miguoliang.englishlearning.model.TranslationMessage
-import kotlinx.coroutines.flow.Flow
-import org.springframework.data.repository.kotlin.CoroutineCrudRepository
-import org.springframework.stereotype.Repository
+import io.quarkus.hibernate.reactive.panache.PanacheRepositoryBase
+import io.smallrye.mutiny.Multi
+import io.smallrye.mutiny.Uni
+import jakarta.enterprise.context.ApplicationScoped
 
-@Repository
-interface TranslationMessageRepository : CoroutineCrudRepository<TranslationMessage, String> {
-    fun findByTranslationKeyCode(translationKeyCode: String): Flow<TranslationMessage>
+@ApplicationScoped
+class TranslationMessageRepository : PanacheRepositoryBase<TranslationMessage, String> {
 
-    suspend fun findByTranslationKeyCodeAndLocaleCode(
+    fun findByTranslationKeyCode(translationKeyCode: String): Multi<TranslationMessage> {
+        return find("translationKeyCode", translationKeyCode).stream()
+    }
+
+    fun findByTranslationKeyCodeAndLocaleCode(
         translationKeyCode: String,
         localeCode: String,
-    ): TranslationMessage?
+    ): Uni<TranslationMessage?> {
+        return find(
+            "translationKeyCode = ?1 and localeCode = ?2",
+            translationKeyCode,
+            localeCode,
+        ).firstResult()
+    }
 
-    fun findByLocaleCode(localeCode: String): Flow<TranslationMessage>
+    fun findByLocaleCode(localeCode: String): Multi<TranslationMessage> {
+        return find("localeCode", localeCode).stream()
+    }
 }

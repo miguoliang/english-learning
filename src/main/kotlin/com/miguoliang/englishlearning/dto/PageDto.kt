@@ -1,9 +1,7 @@
 package com.miguoliang.englishlearning.dto
 
-import org.springframework.data.domain.Page
-
 /**
- * DTO wrapper for Spring Page responses.
+ * DTO wrapper for paginated responses.
  * Provides consistent pagination structure matching API specification.
  */
 data class PageDto<T>(
@@ -20,18 +18,3 @@ data class PageInfoDto(
     val totalElements: Long,
     val totalPages: Int,
 )
-
-/**
- * Converts Spring Page to PageDto.
- */
-fun <T : Any> Page<T>.toDto(): PageDto<T> =
-    PageDto(
-        content = this.content,
-        page =
-            PageInfoDto(
-                number = this.number,
-                size = this.size,
-                totalElements = this.totalElements,
-                totalPages = this.totalPages,
-            ),
-    )

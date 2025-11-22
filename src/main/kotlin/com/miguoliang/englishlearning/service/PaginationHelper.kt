@@ -1,52 +1,56 @@
 package com.miguoliang.englishlearning.service
 
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.toList
-import org.springframework.data.domain.Page
-import org.springframework.data.domain.PageImpl
-import org.springframework.data.domain.Pageable
-import org.springframework.stereotype.Service
+import com.miguoliang.englishlearning.common.Page
+import com.miguoliang.englishlearning.common.Pageable
+import io.smallrye.mutiny.Multi
+import io.smallrye.mutiny.Uni
+import jakarta.enterprise.context.ApplicationScoped
 
 /**
  * Reusable utility service that encapsulates pagination pattern.
- * Provides paginate() method that combines Flow<T> data query and suspend count query into Page<T>.
+ * Provides paginate() method that combines Multi<T> data query and Uni count query into Page<T>.
  * Used by all services that need pagination to eliminate boilerplate code.
  */
-@Service
+@ApplicationScoped
 class PaginationHelper {
     /**
-     * Paginates data from Flow and count into a Page.
+     * Paginates data from Multi and count into a Page.
      *
-     * @param data The Flow containing the paginated data
-     * @param count Suspend function returning the total count
+     * @param data The Multi containing the paginated data
+     * @param count Uni returning the total count
      * @param pageable The pagination parameters
-     * @return Page with the data and pagination info
+     * @return Uni<Page> with the data and pagination info
      */
-    suspend fun <T : Any> paginate(
-        data: Flow<T>,
-        count: suspend () -> Long,
+    fun <T : Any> paginate(
+        data: Multi<T>,
+        count: Uni<Long>,
         pageable: Pageable,
-    ): Page<T> =
-        coroutineScope {
-            val itemsDeferred = async { data.toList() }
-            val totalDeferred = async { count() }
-            PageImpl(itemsDeferred.await(), pageable, totalDeferred.await())
-        }
+    ): Uni<Page<T>> {
+        val itemsUni = data.collect().asList()
+
+        return Uni.combine().all().unis(itemsUni, count).asTuple()
+            .map { tuple ->
+                Page(
+                    content = tuple.item1,
+                    number = pageable.page,
+                    size = pageable.size,
+                    totalElements = tuple.item2
+                )
+            }
+    }
 
     /**
      * Paginates data from separate data and count queries.
      * Convenience method that combines dataQuery and countQuery.
      *
-     * @param dataQuery The Flow query for paginated data
-     * @param countQuery Suspend function for total count
+     * @param dataQuery The Multi query for paginated data
+     * @param countQuery Uni for total count
      * @param pageable The pagination parameters
-     * @return Page with the data and pagination info
+     * @return Uni<Page> with the data and pagination info
      */
-    suspend fun <T : Any> paginateWithQuery(
-        dataQuery: Flow<T>,
-        countQuery: suspend () -> Long,
+    fun <T : Any> paginateWithQuery(
+        dataQuery: Multi<T>,
+        countQuery: Uni<Long>,
         pageable: Pageable,
-    ): Page<T> = paginate(dataQuery, countQuery, pageable)
+    ): Uni<Page<T>> = paginate(dataQuery, countQuery, pageable)
 }

@@ -1,22 +1,24 @@
 package com.miguoliang.englishlearning.service
 
+import com.miguoliang.englishlearning.common.Page
+import com.miguoliang.englishlearning.common.Pageable
 import com.miguoliang.englishlearning.model.AccountCard
 import com.miguoliang.englishlearning.model.ReviewHistory
 import com.miguoliang.englishlearning.repository.AccountCardRepository
 import com.miguoliang.englishlearning.repository.ReviewHistoryRepository
-import org.springframework.data.domain.Page
-import org.springframework.data.domain.Pageable
-import org.springframework.stereotype.Service
+import io.smallrye.mutiny.Uni
+import jakarta.enterprise.context.ApplicationScoped
 import java.time.LocalDateTime
 
 /**
  * Manages account card operations and reviews.
  */
-@Service
+@ApplicationScoped
 class AccountCardService(
     private val accountCardRepository: AccountCardRepository,
     private val reviewHistoryRepository: ReviewHistoryRepository,
     private val paginationHelper: PaginationHelper,
+    private val sm2Algorithm: Sm2Algorithm,
 ) {
     /**
      * Initialize cards for account.
@@ -25,15 +27,15 @@ class AccountCardService(
      *
      * @param accountId Account ID
      * @param cardTypeCodes Optional list of card type codes (if null, initializes for all types)
-     * @return Count of created cards
+     * @return Uni<Int> count of created cards
      */
-    suspend fun initializeCards(
+    fun initializeCards(
         accountId: Long,
         cardTypeCodes: List<String>?,
-    ): Int {
+    ): Uni<Int> {
         // TODO: This should trigger Temporal workflow for card initialization
         // For now, this is a placeholder
-        return 0
+        return Uni.createFrom().item(0)
     }
 
     /**
@@ -42,13 +44,13 @@ class AccountCardService(
      * @param accountId Account ID
      * @param pageable Pagination parameters
      * @param cardTypeCode Optional card type filter
-     * @return Page of AccountCard items
+     * @return Uni<Page> of AccountCard items
      */
-    suspend fun getDueCards(
+    fun getDueCards(
         accountId: Long,
         pageable: Pageable,
         cardTypeCode: String? = null,
-    ): Page<AccountCard> {
+    ): Uni<Page<AccountCard>> {
         val now = LocalDateTime.now()
         return if (cardTypeCode != null) {
             paginationHelper.paginate(
@@ -58,13 +60,13 @@ class AccountCardService(
                     cardTypeCode,
                     pageable,
                 ),
-                { accountCardRepository.countDueCardsByAccountIdAndCardTypeCode(accountId, now, cardTypeCode) },
+                accountCardRepository.countDueCardsByAccountIdAndCardTypeCode(accountId, now, cardTypeCode),
                 pageable,
             )
         } else {
             paginationHelper.paginate(
                 accountCardRepository.findDueCardsByAccountId(accountId, now, pageable),
-                { accountCardRepository.countDueCardsByAccountId(accountId, now) },
+                accountCardRepository.countDueCardsByAccountId(accountId, now),
                 pageable,
             )
         }
@@ -76,39 +78,50 @@ class AccountCardService(
      * @param accountId Account ID
      * @param cardId Card ID
      * @param quality Quality rating (0-5)
-     * @return Updated AccountCard
+     * @return Uni<AccountCard> updated AccountCard
      */
-    suspend fun reviewCard(
+    fun reviewCard(
         accountId: Long,
         cardId: Long,
         quality: Int,
-    ): AccountCard {
-        val card = accountCardRepository.findById(cardId)
-            ?: error("Card not found")
-
-        check(card.accountId == accountId) { "Card does not belong to account" }
-
-        // Apply SM-2 algorithm
-        val updatedCard =
-            Sm2Algorithm
-                .calculateNextReview(card, quality)
-                .copy(updatedAt = java.time.Instant.now())
-
-        // Save updated card
-        val savedCard = accountCardRepository.save(updatedCard)
-
-        // Create review history entry
-        val reviewHistory =
-            ReviewHistory(
-                id = null,
-                accountCardId = savedCard.id ?: error("Saved card must have an ID"),
-                quality = quality,
-                reviewedAt = LocalDateTime.now(),
-                createdBy = null,
-            )
-        reviewHistoryRepository.save(reviewHistory)
-
-        return savedCard
+    ): Uni<AccountCard> {
+        return accountCardRepository.findById(cardId)
+            .onItem().ifNull().failWith { IllegalStateException("Card not found") }
+            .onItem().transform { card ->
+                if (card.accountId != accountId) {
+                    throw IllegalArgumentException("Card does not belong to account")
+                }
+                card
+            }
+            .onItem().transform { card ->
+                // Apply SM-2 algorithm
+                sm2Algorithm
+                    .calculateNextReview(card, quality)
+                    .copy(updatedAt = java.time.Instant.now())
+            }
+            .flatMap { updatedCard ->
+                // Save updated card
+                accountCardRepository.persistAndFlush(updatedCard)
+                    .map { updatedCard }
+            }
+            .flatMap { savedCard ->
+                // Create review history entry
+                val cardId = savedCard.id
+                if (cardId == null) {
+                    Uni.createFrom().failure(IllegalStateException("Saved card must have an ID"))
+                } else {
+                    val reviewHistory =
+                        ReviewHistory(
+                            id = null,
+                            accountCardId = cardId,
+                            quality = quality,
+                            reviewedAt = LocalDateTime.now(),
+                            createdBy = null,
+                        )
+                    reviewHistoryRepository.persistAndFlush(reviewHistory)
+                        .map { savedCard }
+                }
+            }
     }
 
     /**
@@ -122,14 +135,14 @@ class AccountCardService(
      *   - `learning`: repetitions > 0 and < 3
      *   - `review`: next_review_date <= today
      *   - `all` or null: No status filter
-     * @return Page of AccountCard items
+     * @return Uni<Page> of AccountCard items
      */
-    suspend fun getAccountCards(
+    fun getAccountCards(
         accountId: Long,
         pageable: Pageable,
         cardTypeCode: String? = null,
         status: String? = null,
-    ): Page<AccountCard> {
+    ): Uni<Page<AccountCard>> {
         val now = LocalDateTime.now()
         val effectiveStatus = if (status == null || status == "all") null else status
 
@@ -141,7 +154,7 @@ class AccountCardService(
                         cardTypeCode,
                         pageable,
                     ),
-                    { accountCardRepository.countByAccountIdAndCardTypeCodeAndStatusNew(accountId, cardTypeCode) },
+                    accountCardRepository.countByAccountIdAndCardTypeCodeAndStatusNew(accountId, cardTypeCode),
                     pageable,
                 )
             }
@@ -152,7 +165,7 @@ class AccountCardService(
                         cardTypeCode,
                         pageable,
                     ),
-                    { accountCardRepository.countByAccountIdAndCardTypeCodeAndStatusLearning(accountId, cardTypeCode) },
+                    accountCardRepository.countByAccountIdAndCardTypeCodeAndStatusLearning(accountId, cardTypeCode),
                     pageable,
                 )
             }
@@ -164,48 +177,46 @@ class AccountCardService(
                         now,
                         pageable,
                     ),
-                    {
-                        accountCardRepository.countByAccountIdAndCardTypeCodeAndStatusReview(
-                            accountId,
-                            cardTypeCode,
-                            now,
-                        )
-                    },
+                    accountCardRepository.countByAccountIdAndCardTypeCodeAndStatusReview(
+                        accountId,
+                        cardTypeCode,
+                        now,
+                    ),
                     pageable,
                 )
             }
             cardTypeCode != null -> {
                 paginationHelper.paginate(
                     accountCardRepository.findByAccountIdAndCardTypeCode(accountId, cardTypeCode, pageable),
-                    { accountCardRepository.countByAccountIdAndCardTypeCode(accountId, cardTypeCode) },
+                    accountCardRepository.countByAccountIdAndCardTypeCode(accountId, cardTypeCode),
                     pageable,
                 )
             }
             effectiveStatus == "new" -> {
                 paginationHelper.paginate(
                     accountCardRepository.findByAccountIdAndStatusNew(accountId, pageable),
-                    { accountCardRepository.countByAccountIdAndStatusNew(accountId) },
+                    accountCardRepository.countByAccountIdAndStatusNew(accountId),
                     pageable,
                 )
             }
             effectiveStatus == "learning" -> {
                 paginationHelper.paginate(
                     accountCardRepository.findByAccountIdAndStatusLearning(accountId, pageable),
-                    { accountCardRepository.countByAccountIdAndStatusLearning(accountId) },
+                    accountCardRepository.countByAccountIdAndStatusLearning(accountId),
                     pageable,
                 )
             }
             effectiveStatus == "review" -> {
                 paginationHelper.paginate(
                     accountCardRepository.findByAccountIdAndStatusReview(accountId, now, pageable),
-                    { accountCardRepository.countByAccountIdAndStatusReview(accountId, now) },
+                    accountCardRepository.countByAccountIdAndStatusReview(accountId, now),
                     pageable,
                 )
             }
             else -> {
                 paginationHelper.paginate(
                     accountCardRepository.findByAccountId(accountId, pageable),
-                    { accountCardRepository.countByAccountId(accountId) },
+                    accountCardRepository.countByAccountId(accountId),
                     pageable,
                 )
             }
@@ -217,13 +228,15 @@ class AccountCardService(
      *
      * @param accountId Account ID
      * @param cardId Card ID
-     * @return AccountCard or null if not found or doesn't belong to account
+     * @return Uni<AccountCard> or null if not found or doesn't belong to account
      */
-    suspend fun getCardById(
+    fun getCardById(
         accountId: Long,
         cardId: Long,
-    ): AccountCard? {
-        val card = accountCardRepository.findById(cardId) ?: return null
-        return if (card.accountId == accountId) card else null
+    ): Uni<AccountCard?> {
+        return accountCardRepository.findById(cardId)
+            .map { card ->
+                if (card != null && card.accountId == accountId) card else null
+            }
     }
 }

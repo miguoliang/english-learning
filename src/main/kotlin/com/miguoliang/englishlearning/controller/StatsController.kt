@@ -2,9 +2,11 @@ package com.miguoliang.englishlearning.controller
 
 import com.miguoliang.englishlearning.dto.StatsDto
 import com.miguoliang.englishlearning.service.StatsService
-import org.springframework.http.HttpStatus
-import org.springframework.http.ResponseEntity
-import org.springframework.web.bind.annotation.*
+import io.smallrye.mutiny.Uni
+import io.smallrye.mutiny.coroutines.asUni
+import jakarta.ws.rs.*
+import jakarta.ws.rs.core.MediaType
+import jakarta.ws.rs.core.Response
 
 /**
  * REST controller for Statistics endpoints.
@@ -13,8 +15,9 @@ import org.springframework.web.bind.annotation.*
  * Note: JWT authentication is not yet implemented. For MVP, accountId is extracted from path.
  * TODO: Extract accountId from JWT token 'sub' claim for /me endpoints.
  */
-@RestController
-@RequestMapping("/api/v1/accounts")
+@Path("/api/v1/accounts")
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
 class StatsController(
     private val statsService: StatsService,
 ) {
@@ -23,17 +26,20 @@ class StatsController(
      * GET /api/v1/accounts/me/stats
      * TODO: Extract accountId from JWT token 'sub' claim
      */
-    @GetMapping("/me/stats")
-    suspend fun getStats(): ResponseEntity<StatsDto> {
+    @GET
+    @Path("/me/stats")
+    fun getStats(): Uni<Response> {
         // TODO: Extract accountId from JWT token
         val accountId = 1L // Placeholder
 
-        return try {
-            ResponseEntity.ok(statsService.getStats(accountId))
-        } catch (error: Exception) {
-            ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(StatsDto(0L, 0L, 0L, 0L, emptyMap()))
-        }
+        return statsService.getStats(accountId)
+            .map { stats ->
+                Response.ok(stats).build()
+            }
+            .onFailure().recoverWithItem { error ->
+                Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(StatsDto(0L, 0L, 0L, 0L, emptyMap()))
+                    .build()
+            }
     }
 }

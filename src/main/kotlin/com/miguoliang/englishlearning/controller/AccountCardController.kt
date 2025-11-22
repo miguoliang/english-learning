@@ -1,19 +1,17 @@
 package com.miguoliang.englishlearning.controller
 
+import com.miguoliang.englishlearning.common.PageRequest
 import com.miguoliang.englishlearning.dto.*
 import com.miguoliang.englishlearning.dto.PageInfoDto
 import com.miguoliang.englishlearning.service.AccountCardService
 import com.miguoliang.englishlearning.service.CardTemplateService
 import com.miguoliang.englishlearning.service.CardTypeService
 import com.miguoliang.englishlearning.service.KnowledgeService
+import io.smallrye.mutiny.Uni
 import jakarta.validation.Valid
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
-import org.springframework.data.domain.Pageable
-import org.springframework.http.HttpStatus
-import org.springframework.http.ResponseEntity
-import org.springframework.web.bind.annotation.*
+import jakarta.ws.rs.*
+import jakarta.ws.rs.core.MediaType
+import jakarta.ws.rs.core.Response
 
 /**
  * REST controller for Account Card endpoints.
@@ -22,8 +20,9 @@ import org.springframework.web.bind.annotation.*
  * Note: JWT authentication is not yet implemented. For MVP, accountId is passed as path parameter.
  * TODO: Extract accountId from JWT token 'sub' claim for /me endpoints.
  */
-@RestController
-@RequestMapping("/api/v1/accounts")
+@Path("/api/v1/accounts")
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
 class AccountCardController(
     private val accountCardService: AccountCardService,
     private val knowledgeService: KnowledgeService,
@@ -35,60 +34,67 @@ class AccountCardController(
      * GET /api/v1/accounts/me/cards
      * TODO: Extract accountId from JWT token 'sub' claim
      */
-    @GetMapping("/me/cards")
-    suspend fun listMyCards(
-        @RequestParam(required = false) card_type_code: String?,
-        @RequestParam(required = false) status: String?,
-        pageable: Pageable,
-    ): ResponseEntity<PageDto<AccountCardDto>> {
+    @GET
+    @Path("/me/cards")
+    fun listMyCards(
+        @QueryParam("card_type_code") card_type_code: String?,
+        @QueryParam("status") status: String?,
+        @QueryParam("page") @DefaultValue("0") page: Int,
+        @QueryParam("size") @DefaultValue("20") size: Int,
+    ): Uni<Response> {
         // TODO: Extract accountId from JWT token
         val accountId = 1L // Placeholder
 
-        return try {
-            val page = accountCardService.getAccountCards(accountId, pageable, card_type_code, status)
+        val pageable = PageRequest.of(page, size)
+        return accountCardService.getAccountCards(accountId, pageable, card_type_code, status)
+            .flatMap { pageResult ->
+                // Batch load knowledge and card types to avoid N+1
+                val knowledgeCodes = pageResult.content.map { it.knowledgeCode }.distinct()
+                val cardTypeCodes = pageResult.content.map { it.cardTypeCode }.distinct()
 
-            // Batch load knowledge and card types to avoid N+1
-            val knowledgeCodes = page.content.map { it.knowledgeCode }.distinct()
-            val cardTypeCodes = page.content.map { it.cardTypeCode }.distinct()
+                Uni.combine().all()
+                    .unis(
+                        knowledgeService.getKnowledgeByCodes(knowledgeCodes),
+                        cardTypeService.getCardTypesByCodes(cardTypeCodes)
+                    )
+                    .asTuple()
+                    .map { tuple ->
+                        val knowledgeMap = tuple.item1
+                        val cardTypeMap = tuple.item2
 
-            val (knowledgeMap, cardTypeMap) =
-                coroutineScope {
-                    val knowledgeDeferred = async { knowledgeService.getKnowledgeByCodes(knowledgeCodes) }
-                    val cardTypeDeferred = async { cardTypeService.getCardTypesByCodes(cardTypeCodes) }
-                    Pair(knowledgeDeferred.await(), cardTypeDeferred.await())
-                }
+                        val dtos =
+                            pageResult.content.mapNotNull { card ->
+                                val knowledge = knowledgeMap[card.knowledgeCode]
+                                val cardType = cardTypeMap[card.cardTypeCode]
+                                if (knowledge != null && cardType != null) {
+                                    card.toDto(
+                                        knowledge = knowledge.toDto(),
+                                        cardType = cardType.toDto(),
+                                    )
+                                } else {
+                                    null
+                                }
+                            }
 
-            val dtos =
-                page.content.mapNotNull { card ->
-                    val knowledge = knowledgeMap[card.knowledgeCode]
-                    val cardType = cardTypeMap[card.cardTypeCode]
-                    if (knowledge != null && cardType != null) {
-                        card.toDto(
-                            knowledge = knowledge.toDto(),
-                            cardType = cardType.toDto(),
-                        )
-                    } else {
-                        null
+                        val pageDto =
+                            PageDto(
+                                content = dtos,
+                                page =
+                                    PageInfoDto(
+                                        number = pageResult.number,
+                                        size = pageResult.size,
+                                        totalElements = pageResult.totalElements,
+                                        totalPages = pageResult.totalPages,
+                                    ),
+                            )
+                        Response.ok(pageDto).build()
                     }
-                }
-
-            val pageDto =
-                PageDto(
-                    content = dtos,
-                    page =
-                        PageInfoDto(
-                            number = page.number,
-                            size = page.size,
-                            totalElements = page.totalElements,
-                            totalPages = page.totalPages,
-                        ),
-                )
-            ResponseEntity.ok(pageDto)
-        } catch (error: Exception) {
-            ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(PageDto(emptyList(), PageInfoDto(0, 0, 0, 0)))
-        }
+            }
+            .onFailure().recoverWithItem { error ->
+                Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(PageDto(emptyList<AccountCardDto>(), PageInfoDto(0, 0, 0, 0)))
+                    .build()
+            }
     }
 
     /**
@@ -96,104 +102,119 @@ class AccountCardController(
      * GET /api/v1/accounts/{accountId}/cards
      * TODO: Validate operator role from JWT token
      */
-    @GetMapping("/{accountId}/cards")
-    suspend fun listAccountCards(
-        @PathVariable accountId: Long,
-        @RequestParam(required = false) card_type_code: String?,
-        @RequestParam(required = false) status: String?,
-        pageable: Pageable,
-    ): ResponseEntity<PageDto<AccountCardDto>> =
-        try {
-            val page = accountCardService.getAccountCards(accountId, pageable, card_type_code, status)
+    @GET
+    @Path("/{accountId}/cards")
+    fun listAccountCards(
+        @PathParam("accountId") accountId: Long,
+        @QueryParam("card_type_code") card_type_code: String?,
+        @QueryParam("status") status: String?,
+        @QueryParam("page") @DefaultValue("0") page: Int,
+        @QueryParam("size") @DefaultValue("20") size: Int,
+    ): Uni<Response> {
+        val pageable = PageRequest.of(page, size)
+        return accountCardService.getAccountCards(accountId, pageable, card_type_code, status)
+            .flatMap { pageResult ->
+                // Batch load knowledge and card types to avoid N+1
+                val knowledgeCodes = pageResult.content.map { it.knowledgeCode }.distinct()
+                val cardTypeCodes = pageResult.content.map { it.cardTypeCode }.distinct()
 
-            // Batch load knowledge and card types to avoid N+1
-            val knowledgeCodes = page.content.map { it.knowledgeCode }.distinct()
-            val cardTypeCodes = page.content.map { it.cardTypeCode }.distinct()
+                Uni.combine().all()
+                    .unis(
+                        knowledgeService.getKnowledgeByCodes(knowledgeCodes),
+                        cardTypeService.getCardTypesByCodes(cardTypeCodes)
+                    )
+                    .asTuple()
+                    .map { tuple ->
+                        val knowledgeMap = tuple.item1
+                        val cardTypeMap = tuple.item2
 
-            val (knowledgeMap, cardTypeMap) =
-                coroutineScope {
-                    val knowledgeDeferred = async { knowledgeService.getKnowledgeByCodes(knowledgeCodes) }
-                    val cardTypeDeferred = async { cardTypeService.getCardTypesByCodes(cardTypeCodes) }
-                    Pair(knowledgeDeferred.await(), cardTypeDeferred.await())
-                }
+                        val dtos =
+                            pageResult.content.mapNotNull { card ->
+                                val knowledge = knowledgeMap[card.knowledgeCode]
+                                val cardType = cardTypeMap[card.cardTypeCode]
+                                if (knowledge != null && cardType != null) {
+                                    card.toDto(
+                                        knowledge = knowledge.toDto(),
+                                        cardType = cardType.toDto(),
+                                    )
+                                } else {
+                                    null
+                                }
+                            }
 
-            val dtos =
-                page.content.mapNotNull { card ->
-                    val knowledge = knowledgeMap[card.knowledgeCode]
-                    val cardType = cardTypeMap[card.cardTypeCode]
-                    if (knowledge != null && cardType != null) {
-                        card.toDto(
-                            knowledge = knowledge.toDto(),
-                            cardType = cardType.toDto(),
-                        )
-                    } else {
-                        null
+                        val pageDto =
+                            PageDto(
+                                content = dtos,
+                                page =
+                                    PageInfoDto(
+                                        number = pageResult.number,
+                                        size = pageResult.size,
+                                        totalElements = pageResult.totalElements,
+                                        totalPages = pageResult.totalPages,
+                                    ),
+                            )
+                        Response.ok(pageDto).build()
                     }
-                }
-
-            val pageDto =
-                PageDto(
-                    content = dtos,
-                    page =
-                        PageInfoDto(
-                            number = page.number,
-                            size = page.size,
-                            totalElements = page.totalElements,
-                            totalPages = page.totalPages,
-                        ),
-                )
-            ResponseEntity.ok(pageDto)
-        } catch (error: Exception) {
-            ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(PageDto(emptyList(), PageInfoDto(0, 0, 0, 0)))
-        }
+            }
+            .onFailure().recoverWithItem { error ->
+                Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(PageDto(emptyList<AccountCardDto>(), PageInfoDto(0, 0, 0, 0)))
+                    .build()
+            }
+    }
 
     /**
      * Get a specific card for current account.
      * GET /api/v1/accounts/me/cards/{cardId}
      * TODO: Extract accountId from JWT token 'sub' claim
      */
-    @GetMapping("/me/cards/{cardId}")
-    suspend fun getMyCard(
-        @PathVariable cardId: Long,
-    ): ResponseEntity<Any> {
+    @GET
+    @Path("/me/cards/{cardId}")
+    fun getMyCard(
+        @PathParam("cardId") cardId: Long,
+    ): Uni<Response> {
         // TODO: Extract accountId from JWT token
         val accountId = 1L // Placeholder
 
-        return try {
-            val card = accountCardService.getCardById(accountId, cardId)
-
-            if (card == null) {
-                ResponseEntity
-                    .status(HttpStatus.NOT_FOUND)
-                    .body(ErrorResponseFactory.notFound("Card", cardId.toString()))
-            } else {
-                val (knowledge, cardType) =
-                    coroutineScope {
-                        val knowledgeDeferred = async { knowledgeService.getKnowledgeByCode(card.knowledgeCode) }
-                        val cardTypeDeferred = async { cardTypeService.getCardTypeByCode(card.cardTypeCode) }
-                        Pair(knowledgeDeferred.await(), cardTypeDeferred.await())
-                    }
-
-                if (knowledge == null || cardType == null) {
-                    ResponseEntity
-                        .status(HttpStatus.NOT_FOUND)
-                        .body<Any>(ErrorResponseFactory.notFound("Knowledge or CardType", card.knowledgeCode))
-                } else {
-                    ResponseEntity.ok<Any>(
-                        card.toDto(
-                            knowledge = knowledge.toDto(),
-                            cardType = cardType.toDto(),
-                        ),
+        return accountCardService.getCardById(accountId, cardId)
+            .flatMap { card ->
+                if (card == null) {
+                    Uni.createFrom().item(
+                        Response.status(Response.Status.NOT_FOUND)
+                            .entity(ErrorResponseFactory.notFound("Card", cardId.toString()))
+                            .build()
                     )
+                } else {
+                    Uni.combine().all()
+                        .unis(
+                            knowledgeService.getKnowledgeByCode(card.knowledgeCode),
+                            cardTypeService.getCardTypeByCode(card.cardTypeCode)
+                        )
+                        .asTuple()
+                        .map { tuple ->
+                            val knowledge = tuple.item1
+                            val cardType = tuple.item2
+
+                            if (knowledge == null || cardType == null) {
+                                Response.status(Response.Status.NOT_FOUND)
+                                    .entity(ErrorResponseFactory.notFound("Knowledge or CardType", card.knowledgeCode))
+                                    .build()
+                            } else {
+                                Response.ok(
+                                    card.toDto(
+                                        knowledge = knowledge.toDto(),
+                                        cardType = cardType.toDto(),
+                                    ),
+                                ).build()
+                            }
+                        }
                 }
             }
-        } catch (error: Exception) {
-            ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(PageDto<AccountCardDto>(emptyList(), PageInfoDto(0, 0, 0, 0)))
-        }
+            .onFailure().recoverWithItem { error ->
+                Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(ErrorResponseFactory.internalError(error.message ?: "Internal server error"))
+                    .build()
+            }
     }
 
     /**
@@ -201,75 +222,84 @@ class AccountCardController(
      * GET /api/v1/accounts/me/cards:due
      * TODO: Extract accountId from JWT token 'sub' claim
      */
-    @GetMapping("/me/cards:due")
-    suspend fun getDueCards(
-        @RequestParam(required = false) card_type_code: String?,
-        pageable: Pageable,
-    ): ResponseEntity<PageDto<AccountCardDto>> {
+    @GET
+    @Path("/me/cards:due")
+    fun getDueCards(
+        @QueryParam("card_type_code") card_type_code: String?,
+        @QueryParam("page") @DefaultValue("0") page: Int,
+        @QueryParam("size") @DefaultValue("20") size: Int,
+    ): Uni<Response> {
         // TODO: Extract accountId from JWT token
         val accountId = 1L // Placeholder
 
-        return try {
-            val page = accountCardService.getDueCards(accountId, pageable, card_type_code)
+        val pageable = PageRequest.of(page, size)
+        return accountCardService.getDueCards(accountId, pageable, card_type_code)
+            .flatMap { pageResult ->
+                // Batch load knowledge and card types to avoid N+1
+                val knowledgeCodes = pageResult.content.map { it.knowledgeCode }.distinct()
+                val cardTypeCodes = pageResult.content.map { it.cardTypeCode }.distinct()
 
-            // Batch load knowledge and card types to avoid N+1
-            val knowledgeCodes = page.content.map { it.knowledgeCode }.distinct()
-            val cardTypeCodes = page.content.map { it.cardTypeCode }.distinct()
+                Uni.combine().all()
+                    .unis(
+                        knowledgeService.getKnowledgeByCodes(knowledgeCodes),
+                        cardTypeService.getCardTypesByCodes(cardTypeCodes)
+                    )
+                    .asTuple()
+                    .flatMap { tuple ->
+                        val knowledgeMap = tuple.item1
+                        val cardTypeMap = tuple.item2
 
-            val (knowledgeMap, cardTypeMap) =
-                coroutineScope {
-                    val knowledgeDeferred = async { knowledgeService.getKnowledgeByCodes(knowledgeCodes) }
-                    val cardTypeDeferred = async { cardTypeService.getCardTypesByCodes(cardTypeCodes) }
-                    Pair(knowledgeDeferred.await(), cardTypeDeferred.await())
-                }
-
-            // Render templates for each card (template rendering is cached internally)
-            val dtos =
-                coroutineScope {
-                    page.content
-                        .mapNotNull { card ->
+                        // Render templates for each card
+                        val dtoUnis = pageResult.content.mapNotNull { card ->
                             val knowledge = knowledgeMap[card.knowledgeCode]
                             val cardType = cardTypeMap[card.cardTypeCode]
                             if (knowledge != null && cardType != null) {
-                                async {
-                                    val (front, back) =
-                                        coroutineScope {
-                                            val frontDeferred =
-                                                async { cardTemplateService.renderByRole(cardType, knowledge, "front") }
-                                            val backDeferred =
-                                                async { cardTemplateService.renderByRole(cardType, knowledge, "back") }
-                                            Pair(frontDeferred.await(), backDeferred.await())
-                                        }
-                                    card.toDto(
-                                        knowledge = knowledge.toDto(),
-                                        cardType = cardType.toDto(),
-                                        front = front,
-                                        back = back,
+                                Uni.combine().all()
+                                    .unis(
+                                        cardTemplateService.renderByRole(cardType, knowledge, "front"),
+                                        cardTemplateService.renderByRole(cardType, knowledge, "back")
                                     )
-                                }
+                                    .asTuple()
+                                    .map { renderTuple ->
+                                        card.toDto(
+                                            knowledge = knowledge.toDto(),
+                                            cardType = cardType.toDto(),
+                                            front = renderTuple.item1,
+                                            back = renderTuple.item2,
+                                        )
+                                    }
                             } else {
                                 null
                             }
-                        }.awaitAll()
-                }
+                        }
 
-            val pageDto =
-                PageDto<AccountCardDto>(
-                    content = dtos,
-                    page =
-                        PageInfoDto(
-                            number = page.number,
-                            size = page.size,
-                            totalElements = page.totalElements,
-                            totalPages = page.totalPages,
-                        ),
-                )
-            ResponseEntity.ok(pageDto)
-        } catch (error: Exception) {
-            ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(PageDto<AccountCardDto>(emptyList(), PageInfoDto(0, 0, 0, 0)))
-        }
+                        // Combine all DTOs
+                        if (dtoUnis.isEmpty()) {
+                            Uni.createFrom().item(emptyList<AccountCardDto>())
+                        } else {
+                            Uni.join().all(dtoUnis).andCollectFailures()
+                        }
+                    }
+                    .map { dtos ->
+                        val pageDto =
+                            PageDto(
+                                content = dtos,
+                                page =
+                                    PageInfoDto(
+                                        number = pageResult.number,
+                                        size = pageResult.size,
+                                        totalElements = pageResult.totalElements,
+                                        totalPages = pageResult.totalPages,
+                                    ),
+                            )
+                        Response.ok(pageDto).build()
+                    }
+            }
+            .onFailure().recoverWithItem { error ->
+                Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(PageDto<AccountCardDto>(emptyList(), PageInfoDto(0, 0, 0, 0)))
+                    .build()
+            }
     }
 
     /**
@@ -277,21 +307,23 @@ class AccountCardController(
      * POST /api/v1/accounts/me/cards:initialize
      * TODO: Extract accountId from JWT token 'sub' claim, trigger Temporal workflow
      */
-    @PostMapping("/me/cards:initialize")
-    suspend fun initializeCards(
-        @RequestBody(required = false) request: InitializeCardsRequestDto?,
-    ): ResponseEntity<Map<String, Int>> {
+    @POST
+    @Path("/me/cards:initialize")
+    fun initializeCards(
+        request: InitializeCardsRequestDto?,
+    ): Uni<Response> {
         // TODO: Extract accountId from JWT token
         val accountId = 1L // Placeholder
 
-        return try {
-            val created = accountCardService.initializeCards(accountId, request?.cardTypeCodes)
-            ResponseEntity.ok(mapOf("created" to created, "skipped" to 0))
-        } catch (error: Exception) {
-            ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(mapOf("created" to 0, "skipped" to 0))
-        }
+        return accountCardService.initializeCards(accountId, request?.cardTypeCodes)
+            .map { created ->
+                Response.ok(mapOf("created" to created, "skipped" to 0)).build()
+            }
+            .onFailure().recoverWithItem { error ->
+                Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(mapOf("created" to 0, "skipped" to 0))
+                    .build()
+            }
     }
 
     /**
@@ -299,53 +331,59 @@ class AccountCardController(
      * POST /api/v1/accounts/me/cards/{cardId}:review
      * TODO: Extract accountId from JWT token 'sub' claim
      */
-    @PostMapping("/me/cards/{cardId}:review")
-    suspend fun reviewCard(
-        @PathVariable cardId: Long,
-        @Valid @RequestBody request: ReviewRequestDto,
-    ): ResponseEntity<Any> {
+    @POST
+    @Path("/me/cards/{cardId}:review")
+    fun reviewCard(
+        @PathParam("cardId") cardId: Long,
+        @Valid request: ReviewRequestDto,
+    ): Uni<Response> {
         // TODO: Extract accountId from JWT token
         val accountId = 1L // Placeholder
 
         // Validate quality range
         if (request.quality !in 0..5) {
-            return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(ErrorResponseFactory.badRequest("Quality must be between 0 and 5"))
+            return Uni.createFrom().item(
+                Response.status(Response.Status.BAD_REQUEST)
+                    .entity(ErrorResponseFactory.badRequest("Quality must be between 0 and 5"))
+                    .build()
+            )
         }
 
-        return try {
-            val card = accountCardService.reviewCard(accountId, cardId, request.quality)
+        return accountCardService.reviewCard(accountId, cardId, request.quality)
+            .flatMap { card ->
+                Uni.combine().all()
+                    .unis(
+                        knowledgeService.getKnowledgeByCode(card.knowledgeCode),
+                        cardTypeService.getCardTypeByCode(card.cardTypeCode)
+                    )
+                    .asTuple()
+                    .map { tuple ->
+                        val knowledge = tuple.item1
+                        val cardType = tuple.item2
 
-            val (knowledge, cardType) =
-                coroutineScope {
-                    val knowledgeDeferred = async { knowledgeService.getKnowledgeByCode(card.knowledgeCode) }
-                    val cardTypeDeferred = async { cardTypeService.getCardTypeByCode(card.cardTypeCode) }
-                    Pair(knowledgeDeferred.await(), cardTypeDeferred.await())
-                }
-
-            if (knowledge == null || cardType == null) {
-                ResponseEntity
-                    .status(HttpStatus.NOT_FOUND)
-                    .body<Any>(ErrorResponseFactory.notFound("Knowledge or CardType", card.knowledgeCode))
-            } else {
-                ResponseEntity.ok<Any>(
-                    card.toDto(
-                        knowledge = knowledge.toDto(),
-                        cardType = cardType.toDto(),
-                    ),
-                )
+                        if (knowledge == null || cardType == null) {
+                            Response.status(Response.Status.NOT_FOUND)
+                                .entity(ErrorResponseFactory.notFound("Knowledge or CardType", card.knowledgeCode))
+                                .build()
+                        } else {
+                            Response.ok(
+                                card.toDto(
+                                    knowledge = knowledge.toDto(),
+                                    cardType = cardType.toDto(),
+                                ),
+                            ).build()
+                        }
+                    }
             }
-        } catch (error: IllegalArgumentException) {
-            ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body<Any>(ErrorResponseFactory.badRequest(error.message ?: "Invalid request"))
-        } catch (error: Exception) {
-            ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body<Any>(
-                    ErrorResponseFactory.internalError(error.message ?: "Internal server error"),
-                )
-        }
+            .onFailure(IllegalArgumentException::class.java).recoverWithItem { error ->
+                Response.status(Response.Status.BAD_REQUEST)
+                    .entity(ErrorResponseFactory.badRequest(error.message ?: "Invalid request"))
+                    .build()
+            }
+            .onFailure().recoverWithItem { error ->
+                Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(ErrorResponseFactory.internalError(error.message ?: "Internal server error"))
+                    .build()
+            }
     }
 }

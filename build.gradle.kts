@@ -1,9 +1,7 @@
 plugins {
-    kotlin("jvm") version "2.3.0-RC" // ← Changed from RC3
-    kotlin("plugin.spring") version "2.3.0-RC" // ← Same
-    id("org.springframework.boot") version "4.0.0"
-    id("io.spring.dependency-management") version "1.1.7"
-    id("org.graalvm.buildtools.native") version "0.11.3"
+    kotlin("jvm") version "2.3.0-RC"
+    kotlin("plugin.allopen") version "2.3.0-RC"
+    id("io.quarkus") version "3.29.4"
     // Code quality plugins
     id("io.gitlab.arturbosch.detekt") version "1.23.7"
     id("org.jlleitschuh.gradle.ktlint") version "12.1.2"
@@ -13,92 +11,105 @@ group = "com.miguoliang"
 version = "0.0.1-SNAPSHOT"
 description = "English Learning"
 
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+
+val quarkusPlatformGroupId: String by project
+val quarkusPlatformArtifactId: String by project
+val quarkusPlatformVersion: String by project
+
+dependencies {
+    // Quarkus BOM
+    implementation(enforcedPlatform("io.quarkus.platform:quarkus-bom:3.29.4"))
+
+    // Quarkus Core
+    implementation("io.quarkus:quarkus-kotlin")
+    implementation("io.quarkus:quarkus-arc")
+
+    // RESTEasy Reactive (JAX-RS)
+    implementation("io.quarkus:quarkus-rest")
+    implementation("io.quarkus:quarkus-rest-jackson")
+
+    // Reactive PostgreSQL with Panache
+    implementation("io.quarkus:quarkus-reactive-pg-client")
+    implementation("io.quarkus:quarkus-hibernate-reactive-panache")
+    implementation("io.quarkus:quarkus-hibernate-reactive-panache-kotlin")
+
+    // Flyway
+    implementation("io.quarkus:quarkus-flyway")
+    implementation("io.quarkus:quarkus-jdbc-postgresql")
+
+    // Validation
+    implementation("io.quarkus:quarkus-hibernate-validator")
+
+    // Health & Metrics
+    implementation("io.quarkus:quarkus-smallrye-health")
+
+    // Kotlin
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
+
+    // Mutiny Kotlin Coroutines
+    implementation("io.smallrye.reactive:mutiny-kotlin")
+
+    // Hypersistence Utils for JSONB support
+    implementation("io.hypersistence:hypersistence-utils-hibernate-63:3.7.3")
+
+    // FreeMarker template engine
+    implementation("org.freemarker:freemarker:2.3.32")
+
+    // Jackson Kotlin
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+
+    // Testing
+    testImplementation("io.quarkus:quarkus-junit5")
+    testImplementation("io.rest-assured:rest-assured")
+    testImplementation("io.quarkus:quarkus-test-hibernate-reactive-panache")
+    testImplementation("org.testcontainers:postgresql")
+}
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
-configurations {
-    compileOnly {
-        extendsFrom(configurations.annotationProcessor.get())
-    }
+tasks.withType<Test> {
+    systemProperty("java.util.logging.manager", "org.jboss.logmanager.LogManager")
 }
 
-repositories {
-    gradlePluginPortal() // ← Add this for RC plugins (Kotlin JVM/Spring)
-    mavenCentral() // Keep for stable deps
-}
-
-dependencies {
-    implementation("org.springframework.boot:spring-boot-starter-actuator")
-    implementation("org.springframework.boot:spring-boot-starter-data-r2dbc")
-    implementation("org.springframework.boot:spring-boot-starter-flyway")
-    implementation("org.springframework.boot:spring-boot-starter-validation")
-    implementation("org.springframework.boot:spring-boot-starter-webflux")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
-    implementation("io.projectreactor.kotlin:reactor-kotlin-extensions")
-    implementation("org.flywaydb:flyway-database-postgresql")
-    implementation("org.jetbrains.kotlin:kotlin-reflect")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
-    implementation("org.springframework:spring-jdbc")
-    // Temporal workflow engine
-    implementation("io.temporal:temporal-sdk:1.24.0")
-    implementation("io.temporal:temporal-kotlin:1.24.0")
-    // FreeMarker template engine
-    implementation("org.freemarker:freemarker:2.3.32")
-    compileOnly("org.projectlombok:lombok")
-    developmentOnly("org.springframework.boot:spring-boot-devtools")
-    runtimeOnly("org.postgresql:postgresql")
-    runtimeOnly("org.postgresql:r2dbc-postgresql")
-    annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
-    annotationProcessor("org.projectlombok:lombok")
-    testImplementation("org.springframework.boot:spring-boot-starter-actuator-test")
-    testImplementation("org.springframework.boot:spring-boot-starter-data-r2dbc-test")
-    testImplementation("org.springframework.boot:spring-boot-starter-flyway-test")
-    testImplementation("org.springframework.boot:spring-boot-starter-validation-test")
-    testImplementation("org.springframework.boot:spring-boot-starter-webflux-test")
-    testImplementation("org.springframework.boot:spring-boot-testcontainers")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
-    testImplementation("org.testcontainers:testcontainers-junit-jupiter")
-    testImplementation("org.testcontainers:testcontainers-postgresql")
-    testImplementation("org.testcontainers:testcontainers-r2dbc")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+allOpen {
+    annotation("jakarta.ws.rs.Path")
+    annotation("jakarta.enterprise.context.ApplicationScoped")
+    annotation("jakarta.persistence.Entity")
+    annotation("io.quarkus.test.junit.QuarkusTest")
 }
 
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_25)
-        freeCompilerArgs.addAll(
-            "-jvm-default=enable", // For Spring interface defaults
-        )
+        freeCompilerArgs.addAll("-Xjsr305=strict")
     }
 }
 
-tasks.withType<Test> {
-    useJUnitPlatform()
-}
-
 // Detekt configuration
-// Note: Detekt 1.23.7 doesn't support Kotlin 2.3.0-RC yet. Set ignoreFailures=true until supported.
 detekt {
     buildUponDefaultConfig = true
     allRules = false
     config.setFrom("$projectDir/config/detekt/detekt.yml")
     baseline = file("$projectDir/config/detekt/baseline.xml")
     parallel = true
-    ignoreFailures = true // TODO: Set to false when detekt supports Kotlin 2.3.0
+    ignoreFailures = true
     autoCorrect = false
 }
 
-// Configure detekt to use matching Kotlin version
 dependencies {
     detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting:1.23.7")
 }
 
 tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
-    // Use detekt CLI instead of embedded to avoid Kotlin version mismatch
     jvmTarget = "25"
     reports {
         html.required.set(true)
@@ -124,7 +135,7 @@ ktlint {
     }
 }
 
-// Remove compilation dependencies from ktlint tasks for faster feedback (like JS tooling)
+// Remove compilation dependencies from ktlint tasks for faster feedback
 tasks.matching { it.name.contains("Ktlint") || it.name.startsWith("ktlint") }.configureEach {
     dependsOn.removeIf { dep ->
         val name = (dep as? Task)?.name ?: dep.toString()

@@ -1,27 +1,29 @@
 package com.miguoliang.englishlearning.model
 
-import org.springframework.data.annotation.Id
-import org.springframework.data.relational.core.mapping.Column
-import org.springframework.data.relational.core.mapping.Table
+import jakarta.persistence.Column
+import jakarta.persistence.Entity
+import jakarta.persistence.Id
+import jakarta.persistence.Table
 import java.time.Instant
 
-@Table("translation_messages")
+@Entity
+@Table(name = "translation_messages")
 data class TranslationMessage(
     @Id
-    @Column("code")
+    @Column(name = "code")
     val code: String,
-    @Column("translation_key_code")
+    @Column(name = "translation_key_code")
     val translationKeyCode: String,
-    @Column("locale_code")
+    @Column(name = "locale_code")
     val localeCode: String,
-    @Column("message")
+    @Column(name = "message")
     val message: String,
-    @Column("created_at")
+    @Column(name = "created_at")
     val createdAt: Instant,
-    @Column("updated_at")
+    @Column(name = "updated_at")
     val updatedAt: Instant,
-    @Column("created_by")
+    @Column(name = "created_by")
     val createdBy: String?,
-    @Column("updated_by")
+    @Column(name = "updated_by")
     val updatedBy: String?,
 )

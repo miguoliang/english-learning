@@ -1,18 +1,30 @@
 package com.miguoliang.englishlearning.repository
 
 import com.miguoliang.englishlearning.model.KnowledgeRel
-import kotlinx.coroutines.flow.Flow
-import org.springframework.data.repository.kotlin.CoroutineCrudRepository
-import org.springframework.stereotype.Repository
+import io.quarkus.hibernate.reactive.panache.PanacheRepository
+import io.smallrye.mutiny.Multi
+import io.smallrye.mutiny.Uni
+import jakarta.enterprise.context.ApplicationScoped
 
-@Repository
-interface KnowledgeRelRepository : CoroutineCrudRepository<KnowledgeRel, Long> {
-    fun findBySourceKnowledgeCode(sourceKnowledgeCode: String): Flow<KnowledgeRel>
+@ApplicationScoped
+class KnowledgeRelRepository : PanacheRepository<KnowledgeRel> {
 
-    fun findByTargetKnowledgeCode(targetKnowledgeCode: String): Flow<KnowledgeRel>
+    fun findBySourceKnowledgeCode(sourceKnowledgeCode: String): Multi<KnowledgeRel> {
+        return find("sourceKnowledgeCode", sourceKnowledgeCode).stream()
+    }
 
-    suspend fun findBySourceKnowledgeCodeAndTargetKnowledgeCode(
+    fun findByTargetKnowledgeCode(targetKnowledgeCode: String): Multi<KnowledgeRel> {
+        return find("targetKnowledgeCode", targetKnowledgeCode).stream()
+    }
+
+    fun findBySourceKnowledgeCodeAndTargetKnowledgeCode(
         sourceKnowledgeCode: String,
         targetKnowledgeCode: String,
-    ): KnowledgeRel?
+    ): Uni<KnowledgeRel?> {
+        return find(
+            "sourceKnowledgeCode = ?1 and targetKnowledgeCode = ?2",
+            sourceKnowledgeCode,
+            targetKnowledgeCode,
+        ).firstResult()
+    }
 }

@@ -1,18 +1,26 @@
 package com.miguoliang.englishlearning.repository
 
 import com.miguoliang.englishlearning.model.CardTypeTemplateRel
-import kotlinx.coroutines.flow.Flow
-import org.springframework.data.repository.kotlin.CoroutineCrudRepository
-import org.springframework.stereotype.Repository
+import io.quarkus.hibernate.reactive.panache.PanacheRepository
+import io.smallrye.mutiny.Multi
+import io.smallrye.mutiny.Uni
+import jakarta.enterprise.context.ApplicationScoped
 
-@Repository
-interface CardTypeTemplateRelRepository : CoroutineCrudRepository<CardTypeTemplateRel, Long> {
-    fun findByCardTypeCode(cardTypeCode: String): Flow<CardTypeTemplateRel>
+@ApplicationScoped
+class CardTypeTemplateRelRepository : PanacheRepository<CardTypeTemplateRel> {
 
-    fun findByTemplateCode(templateCode: String): Flow<CardTypeTemplateRel>
+    fun findByCardTypeCode(cardTypeCode: String): Multi<CardTypeTemplateRel> {
+        return find("cardTypeCode", cardTypeCode).stream()
+    }
 
-    suspend fun findByCardTypeCodeAndRole(
+    fun findByTemplateCode(templateCode: String): Multi<CardTypeTemplateRel> {
+        return find("templateCode", templateCode).stream()
+    }
+
+    fun findByCardTypeCodeAndRole(
         cardTypeCode: String,
         role: String,
-    ): CardTypeTemplateRel?
+    ): Uni<CardTypeTemplateRel?> {
+        return find("cardTypeCode = ?1 and role = ?2", cardTypeCode, role).firstResult()
+    }
 }

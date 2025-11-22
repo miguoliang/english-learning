@@ -1,39 +1,41 @@
 package com.miguoliang.englishlearning.model
 
-import org.springframework.data.annotation.Id
-import org.springframework.data.relational.core.mapping.Column
-import org.springframework.data.relational.core.mapping.Table
+import jakarta.persistence.Column
+import jakarta.persistence.Entity
+import jakarta.persistence.Id
+import jakarta.persistence.Table
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDateTime
 
-@Table("account_cards")
+@Entity
+@Table(name = "account_cards")
 data class AccountCard(
     @Id
-    @Column("id")
+    @Column(name = "id")
     val id: Long? = null,
-    @Column("account_id")
+    @Column(name = "account_id")
     val accountId: Long,
-    @Column("knowledge_code")
+    @Column(name = "knowledge_code")
     val knowledgeCode: String,
-    @Column("card_type_code")
+    @Column(name = "card_type_code")
     val cardTypeCode: String,
-    @Column("ease_factor")
+    @Column(name = "ease_factor")
     val easeFactor: BigDecimal,
-    @Column("interval_days")
+    @Column(name = "interval_days")
     val intervalDays: Int,
-    @Column("repetitions")
+    @Column(name = "repetitions")
     val repetitions: Int,
-    @Column("next_review_date")
+    @Column(name = "next_review_date")
     val nextReviewDate: LocalDateTime,
-    @Column("last_reviewed_at")
+    @Column(name = "last_reviewed_at")
     val lastReviewedAt: LocalDateTime?,
-    @Column("created_at")
+    @Column(name = "created_at")
     val createdAt: Instant,
-    @Column("updated_at")
+    @Column(name = "updated_at")
     val updatedAt: Instant,
-    @Column("created_by")
+    @Column(name = "created_by")
     val createdBy: String?,
-    @Column("updated_by")
+    @Column(name = "updated_by")
     val updatedBy: String?,
 )

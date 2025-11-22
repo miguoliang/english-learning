@@ -1,23 +1,25 @@
 package com.miguoliang.englishlearning.model
 
-import org.springframework.data.annotation.Id
-import org.springframework.data.relational.core.mapping.Column
-import org.springframework.data.relational.core.mapping.Table
+import jakarta.persistence.Column
+import jakarta.persistence.Entity
+import jakarta.persistence.Id
+import jakarta.persistence.Table
 import java.time.Instant
 
-@Table("accounts")
+@Entity
+@Table(name = "accounts")
 data class Account(
     @Id
-    @Column("id")
+    @Column(name = "id")
     val id: Long? = null,
-    @Column("username")
+    @Column(name = "username")
     val username: String,
-    @Column("created_at")
+    @Column(name = "created_at")
     val createdAt: Instant,
-    @Column("updated_at")
+    @Column(name = "updated_at")
     val updatedAt: Instant,
-    @Column("created_by")
+    @Column(name = "created_by")
     val createdBy: String?,
-    @Column("updated_by")
+    @Column(name = "updated_by")
     val updatedBy: String?,
 )

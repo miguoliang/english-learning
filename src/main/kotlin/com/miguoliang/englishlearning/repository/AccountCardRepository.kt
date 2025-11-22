@@ -1,170 +1,226 @@
 package com.miguoliang.englishlearning.repository
 
+import com.miguoliang.englishlearning.common.Pageable
 import com.miguoliang.englishlearning.model.AccountCard
-import kotlinx.coroutines.flow.Flow
-import org.springframework.data.domain.Pageable
-import org.springframework.data.r2dbc.repository.Query
-import org.springframework.data.repository.kotlin.CoroutineCrudRepository
-import org.springframework.stereotype.Repository
+import io.quarkus.hibernate.reactive.panache.PanacheRepository
+import io.quarkus.panache.common.Page
+import io.smallrye.mutiny.Multi
+import io.smallrye.mutiny.Uni
+import jakarta.enterprise.context.ApplicationScoped
 import java.time.LocalDateTime
 
-@Repository
-interface AccountCardRepository : CoroutineCrudRepository<AccountCard, Long> {
-    fun findByAccountId(accountId: Long): Flow<AccountCard>
+@ApplicationScoped
+class AccountCardRepository : PanacheRepository<AccountCard> {
 
-    @Query(
-        "SELECT * FROM account_cards WHERE account_id = :accountId AND next_review_date <= :date ORDER BY next_review_date OFFSET :#{#pageable.offset} LIMIT :#{#pageable.pageSize}",
-    )
+    fun findByAccountId(accountId: Long): Multi<AccountCard> {
+        return find("accountId", accountId).stream()
+    }
+
     fun findDueCardsByAccountId(
         accountId: Long,
         date: LocalDateTime,
         pageable: Pageable,
-    ): Flow<AccountCard>
+    ): Multi<AccountCard> {
+        return find(
+            "accountId = ?1 and nextReviewDate <= ?2 order by nextReviewDate",
+            accountId,
+            date,
+        ).stream().page(Page.of(pageable.page, pageable.size))
+    }
 
-    @Query("SELECT COUNT(*) FROM account_cards WHERE account_id = :accountId AND next_review_date <= :date")
-    suspend fun countDueCardsByAccountId(
+    fun countDueCardsByAccountId(
         accountId: Long,
         date: LocalDateTime,
-    ): Long
+    ): Uni<Long> {
+        return count("accountId = ?1 and nextReviewDate <= ?2", accountId, date)
+    }
 
-    @Query(
-        "SELECT * FROM account_cards WHERE account_id = :accountId AND next_review_date <= :date AND card_type_code = :cardTypeCode ORDER BY next_review_date OFFSET :#{#pageable.offset} LIMIT :#{#pageable.pageSize}",
-    )
     fun findDueCardsByAccountIdAndCardTypeCode(
         accountId: Long,
         date: LocalDateTime,
         cardTypeCode: String,
         pageable: Pageable,
-    ): Flow<AccountCard>
+    ): Multi<AccountCard> {
+        return find(
+            "accountId = ?1 and nextReviewDate <= ?2 and cardTypeCode = ?3 order by nextReviewDate",
+            accountId,
+            date,
+            cardTypeCode,
+        ).stream().page(Page.of(pageable.page, pageable.size))
+    }
 
-    @Query(
-        "SELECT COUNT(*) FROM account_cards WHERE account_id = :accountId AND next_review_date <= :date AND card_type_code = :cardTypeCode",
-    )
-    suspend fun countDueCardsByAccountIdAndCardTypeCode(
+    fun countDueCardsByAccountIdAndCardTypeCode(
         accountId: Long,
         date: LocalDateTime,
         cardTypeCode: String,
-    ): Long
+    ): Uni<Long> {
+        return count(
+            "accountId = ?1 and nextReviewDate <= ?2 and cardTypeCode = ?3",
+            accountId,
+            date,
+            cardTypeCode,
+        )
+    }
 
-    suspend fun findByAccountIdAndKnowledgeCodeAndCardTypeCode(
+    fun findByAccountIdAndKnowledgeCodeAndCardTypeCode(
         accountId: Long,
         knowledgeCode: String,
         cardTypeCode: String,
-    ): AccountCard?
+    ): Uni<AccountCard?> {
+        return find(
+            "accountId = ?1 and knowledgeCode = ?2 and cardTypeCode = ?3",
+            accountId,
+            knowledgeCode,
+            cardTypeCode,
+        ).firstResult()
+    }
 
-    @Query(
-        "SELECT * FROM account_cards WHERE account_id = :accountId ORDER BY id OFFSET :#{#pageable.offset} LIMIT :#{#pageable.pageSize}",
-    )
     fun findByAccountId(
         accountId: Long,
         pageable: Pageable,
-    ): Flow<AccountCard>
+    ): Multi<AccountCard> {
+        return find("accountId = ?1 order by id", accountId)
+            .page(Page.of(pageable.page, pageable.size))
+    }
 
-    @Query("SELECT COUNT(*) FROM account_cards WHERE account_id = :accountId")
-    suspend fun countByAccountId(accountId: Long): Long
+    fun countByAccountId(accountId: Long): Uni<Long> {
+        return count("accountId", accountId)
+    }
 
-    @Query(
-        "SELECT * FROM account_cards WHERE account_id = :accountId AND card_type_code = :cardTypeCode ORDER BY id OFFSET :#{#pageable.offset} LIMIT :#{#pageable.pageSize}",
-    )
     fun findByAccountIdAndCardTypeCode(
         accountId: Long,
         cardTypeCode: String,
         pageable: Pageable,
-    ): Flow<AccountCard>
+    ): Multi<AccountCard> {
+        return find(
+            "accountId = ?1 and cardTypeCode = ?2 order by id",
+            accountId,
+            cardTypeCode,
+        ).stream().page(Page.of(pageable.page, pageable.size))
+    }
 
-    @Query("SELECT COUNT(*) FROM account_cards WHERE account_id = :accountId AND card_type_code = :cardTypeCode")
-    suspend fun countByAccountIdAndCardTypeCode(
+    fun countByAccountIdAndCardTypeCode(
         accountId: Long,
         cardTypeCode: String,
-    ): Long
+    ): Uni<Long> {
+        return count("accountId = ?1 and cardTypeCode = ?2", accountId, cardTypeCode)
+    }
 
-    @Query(
-        "SELECT * FROM account_cards WHERE account_id = :accountId AND repetitions = 0 ORDER BY id OFFSET :#{#pageable.offset} LIMIT :#{#pageable.pageSize}",
-    )
     fun findByAccountIdAndStatusNew(
         accountId: Long,
         pageable: Pageable,
-    ): Flow<AccountCard>
+    ): Multi<AccountCard> {
+        return find("accountId = ?1 and repetitions = 0 order by id", accountId)
+            .page(Page.of(pageable.page, pageable.size))
+    }
 
-    @Query("SELECT COUNT(*) FROM account_cards WHERE account_id = :accountId AND repetitions = 0")
-    suspend fun countByAccountIdAndStatusNew(accountId: Long): Long
+    fun countByAccountIdAndStatusNew(accountId: Long): Uni<Long> {
+        return count("accountId = ?1 and repetitions = 0", accountId)
+    }
 
-    @Query(
-        "SELECT * FROM account_cards WHERE account_id = :accountId AND repetitions > 0 AND repetitions < 3 ORDER BY id OFFSET :#{#pageable.offset} LIMIT :#{#pageable.pageSize}",
-    )
     fun findByAccountIdAndStatusLearning(
         accountId: Long,
         pageable: Pageable,
-    ): Flow<AccountCard>
+    ): Multi<AccountCard> {
+        return find(
+            "accountId = ?1 and repetitions > 0 and repetitions < 3 order by id",
+            accountId,
+        ).stream().page(Page.of(pageable.page, pageable.size))
+    }
 
-    @Query("SELECT COUNT(*) FROM account_cards WHERE account_id = :accountId AND repetitions > 0 AND repetitions < 3")
-    suspend fun countByAccountIdAndStatusLearning(accountId: Long): Long
+    fun countByAccountIdAndStatusLearning(accountId: Long): Uni<Long> {
+        return count("accountId = ?1 and repetitions > 0 and repetitions < 3", accountId)
+    }
 
-    @Query(
-        "SELECT * FROM account_cards WHERE account_id = :accountId AND next_review_date <= :date ORDER BY id OFFSET :#{#pageable.offset} LIMIT :#{#pageable.pageSize}",
-    )
     fun findByAccountIdAndStatusReview(
         accountId: Long,
         date: LocalDateTime,
         pageable: Pageable,
-    ): Flow<AccountCard>
+    ): Multi<AccountCard> {
+        return find(
+            "accountId = ?1 and nextReviewDate <= ?2 order by id",
+            accountId,
+            date,
+        ).stream().page(Page.of(pageable.page, pageable.size))
+    }
 
-    @Query("SELECT COUNT(*) FROM account_cards WHERE account_id = :accountId AND next_review_date <= :date")
-    suspend fun countByAccountIdAndStatusReview(
+    fun countByAccountIdAndStatusReview(
         accountId: Long,
         date: LocalDateTime,
-    ): Long
+    ): Uni<Long> {
+        return count("accountId = ?1 and nextReviewDate <= ?2", accountId, date)
+    }
 
-    @Query(
-        "SELECT * FROM account_cards WHERE account_id = :accountId AND card_type_code = :cardTypeCode AND repetitions = 0 ORDER BY id OFFSET :#{#pageable.offset} LIMIT :#{#pageable.pageSize}",
-    )
     fun findByAccountIdAndCardTypeCodeAndStatusNew(
         accountId: Long,
         cardTypeCode: String,
         pageable: Pageable,
-    ): Flow<AccountCard>
+    ): Multi<AccountCard> {
+        return find(
+            "accountId = ?1 and cardTypeCode = ?2 and repetitions = 0 order by id",
+            accountId,
+            cardTypeCode,
+        ).stream().page(Page.of(pageable.page, pageable.size))
+    }
 
-    @Query(
-        "SELECT COUNT(*) FROM account_cards WHERE account_id = :accountId AND card_type_code = :cardTypeCode AND repetitions = 0",
-    )
-    suspend fun countByAccountIdAndCardTypeCodeAndStatusNew(
+    fun countByAccountIdAndCardTypeCodeAndStatusNew(
         accountId: Long,
         cardTypeCode: String,
-    ): Long
+    ): Uni<Long> {
+        return count(
+            "accountId = ?1 and cardTypeCode = ?2 and repetitions = 0",
+            accountId,
+            cardTypeCode,
+        )
+    }
 
-    @Query(
-        "SELECT * FROM account_cards WHERE account_id = :accountId AND card_type_code = :cardTypeCode AND repetitions > 0 AND repetitions < 3 ORDER BY id OFFSET :#{#pageable.offset} LIMIT :#{#pageable.pageSize}",
-    )
     fun findByAccountIdAndCardTypeCodeAndStatusLearning(
         accountId: Long,
         cardTypeCode: String,
         pageable: Pageable,
-    ): Flow<AccountCard>
+    ): Multi<AccountCard> {
+        return find(
+            "accountId = ?1 and cardTypeCode = ?2 and repetitions > 0 and repetitions < 3 order by id",
+            accountId,
+            cardTypeCode,
+        ).stream().page(Page.of(pageable.page, pageable.size))
+    }
 
-    @Query(
-        "SELECT COUNT(*) FROM account_cards WHERE account_id = :accountId AND card_type_code = :cardTypeCode AND repetitions > 0 AND repetitions < 3",
-    )
-    suspend fun countByAccountIdAndCardTypeCodeAndStatusLearning(
+    fun countByAccountIdAndCardTypeCodeAndStatusLearning(
         accountId: Long,
         cardTypeCode: String,
-    ): Long
+    ): Uni<Long> {
+        return count(
+            "accountId = ?1 and cardTypeCode = ?2 and repetitions > 0 and repetitions < 3",
+            accountId,
+            cardTypeCode,
+        )
+    }
 
-    @Query(
-        "SELECT * FROM account_cards WHERE account_id = :accountId AND card_type_code = :cardTypeCode AND next_review_date <= :date ORDER BY id OFFSET :#{#pageable.offset} LIMIT :#{#pageable.pageSize}",
-    )
     fun findByAccountIdAndCardTypeCodeAndStatusReview(
         accountId: Long,
         cardTypeCode: String,
         date: LocalDateTime,
         pageable: Pageable,
-    ): Flow<AccountCard>
+    ): Multi<AccountCard> {
+        return find(
+            "accountId = ?1 and cardTypeCode = ?2 and nextReviewDate <= ?3 order by id",
+            accountId,
+            cardTypeCode,
+            date,
+        ).stream().page(Page.of(pageable.page, pageable.size))
+    }
 
-    @Query(
-        "SELECT COUNT(*) FROM account_cards WHERE account_id = :accountId AND card_type_code = :cardTypeCode AND next_review_date <= :date",
-    )
-    suspend fun countByAccountIdAndCardTypeCodeAndStatusReview(
+    fun countByAccountIdAndCardTypeCodeAndStatusReview(
         accountId: Long,
         cardTypeCode: String,
         date: LocalDateTime,
-    ): Long
+    ): Uni<Long> {
+        return count(
+            "accountId = ?1 and cardTypeCode = ?2 and nextReviewDate <= ?3",
+            accountId,
+            cardTypeCode,
+            date,
+        )
+    }
 }

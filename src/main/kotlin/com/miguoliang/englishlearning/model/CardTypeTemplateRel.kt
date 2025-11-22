@@ -1,27 +1,29 @@
 package com.miguoliang.englishlearning.model
 
-import org.springframework.data.annotation.Id
-import org.springframework.data.relational.core.mapping.Column
-import org.springframework.data.relational.core.mapping.Table
+import jakarta.persistence.Column
+import jakarta.persistence.Entity
+import jakarta.persistence.Id
+import jakarta.persistence.Table
 import java.time.Instant
 
-@Table("card_type_template_rel")
+@Entity
+@Table(name = "card_type_template_rel")
 data class CardTypeTemplateRel(
     @Id
-    @Column("id")
+    @Column(name = "id")
     val id: Long? = null,
-    @Column("card_type_code")
+    @Column(name = "card_type_code")
     val cardTypeCode: String,
-    @Column("template_code")
+    @Column(name = "template_code")
     val templateCode: String,
-    @Column("role")
+    @Column(name = "role")
     val role: String,
-    @Column("created_at")
+    @Column(name = "created_at")
     val createdAt: Instant,
-    @Column("updated_at")
+    @Column(name = "updated_at")
     val updatedAt: Instant,
-    @Column("created_by")
+    @Column(name = "created_by")
     val createdBy: String?,
-    @Column("updated_by")
+    @Column(name = "updated_by")
     val updatedBy: String?,
 )

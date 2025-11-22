@@ -2,13 +2,14 @@ package com.miguoliang.englishlearning.service
 
 import com.miguoliang.englishlearning.model.Template
 import com.miguoliang.englishlearning.repository.TemplateRepository
-import kotlinx.coroutines.flow.Flow
-import org.springframework.stereotype.Service
+import io.smallrye.mutiny.Multi
+import io.smallrye.mutiny.Uni
+import jakarta.enterprise.context.ApplicationScoped
 
 /**
  * Manages template operations.
  */
-@Service
+@ApplicationScoped
 class TemplateService(
     private val templateRepository: TemplateRepository,
 ) {
@@ -16,15 +17,15 @@ class TemplateService(
      * Get single template by code.
      *
      * @param code Template code identifier
-     * @return Template or null if not found
+     * @return Uni<Template> or null if not found
      */
-    suspend fun getTemplateByCode(code: String): Template? = templateRepository.findByCode(code)
+    fun getTemplateByCode(code: String): Uni<Template?> = templateRepository.findByCode(code)
 
     /**
      * List all templates.
      * Usage determined by relationships (card_type_template_rel).
      *
-     * @return Flow of all templates
+     * @return Multi of all templates
      */
-    fun getAllTemplates(): Flow<Template> = templateRepository.findAll()
+    fun getAllTemplates(): Multi<Template> = templateRepository.streamAll()
 }

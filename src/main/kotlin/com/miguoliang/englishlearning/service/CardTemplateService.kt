@@ -7,11 +7,10 @@ import com.miguoliang.englishlearning.repository.CardTypeTemplateRelRepository
 import com.miguoliang.englishlearning.repository.KnowledgeRelRepository
 import com.miguoliang.englishlearning.repository.KnowledgeRepository
 import freemarker.template.Configuration
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.withContext
-import org.springframework.stereotype.Service
+import io.smallrye.mutiny.Uni
+import io.vertx.core.Context
+import io.vertx.core.Vertx
+import jakarta.enterprise.context.ApplicationScoped
 import java.io.StringWriter
 import java.nio.charset.StandardCharsets
 import java.util.UUID
@@ -24,7 +23,7 @@ import java.util.UUID
  * Metadata can be accessed via dot notation (e.g., `${metadata.key}` or `${metadata.nested.key}`).
  * Template format field value is `ftl` for FreeMarker templates.
  */
-@Service
+@ApplicationScoped
 class CardTemplateService(
     private val templateService: TemplateService,
     private val cardTypeTemplateRelRepository: CardTypeTemplateRelRepository,
@@ -38,53 +37,62 @@ class CardTemplateService(
      * @param cardType Card type
      * @param knowledge Knowledge item to render
      * @param role Template role (e.g., "front", "back")
-     * @return Rendered content string, or empty string if template not found
+     * @return Uni<String> rendered content string, or empty string if template not found
      */
-    suspend fun renderByRole(
+    fun renderByRole(
         cardType: CardType,
         knowledge: Knowledge,
         role: String,
-    ): String {
+    ): Uni<String> {
         // Find template for this card type and role
-        val rel =
-            cardTypeTemplateRelRepository.findByCardTypeCodeAndRole(cardType.code, role)
-                ?: return ""
-
-        val template =
-            templateService.getTemplateByCode(rel.templateCode)
-                ?: return ""
-
-        // Validate template format
-        if (template.format != "ftl") {
-            throw IllegalArgumentException(
-                "Unsupported template format: ${template.format}. Expected 'ftl' for FreeMarker.",
-            )
-        }
-
-        // Load related knowledge items
-        val relatedKnowledge = loadRelatedKnowledge(knowledge.code)
-
-        // Render template using FreeMarker
-        return renderTemplate(template, knowledge, relatedKnowledge)
+        return cardTypeTemplateRelRepository.findByCardTypeCodeAndRole(cardType.code, role)
+            .flatMap { rel ->
+                if (rel == null) {
+                    Uni.createFrom().item("")
+                } else {
+                    templateService.getTemplateByCode(rel.templateCode)
+                        .flatMap { template ->
+                            if (template == null) {
+                                Uni.createFrom().item("")
+                            } else {
+                                // Validate template format
+                                if (template.format != "ftl") {
+                                    Uni.createFrom().failure(
+                                        IllegalArgumentException(
+                                            "Unsupported template format: ${template.format}. Expected 'ftl' for FreeMarker.",
+                                        )
+                                    )
+                                } else {
+                                    // Load related knowledge items
+                                    loadRelatedKnowledge(knowledge.code)
+                                        .flatMap { relatedKnowledge ->
+                                            // Render template using FreeMarker
+                                            renderTemplate(template, knowledge, relatedKnowledge)
+                                        }
+                                }
+                            }
+                        }
+                }
+            }
     }
 
     /**
      * Loads related knowledge items via knowledge_rel junction table.
      * Uses batch loading to avoid N+1 queries.
      */
-    private suspend fun loadRelatedKnowledge(knowledgeCode: String): List<Knowledge> {
-        val targetCodes =
-            knowledgeRelRepository
-                .findBySourceKnowledgeCode(knowledgeCode)
-                .map { it.targetKnowledgeCode }
-                .toList()
-
-        if (targetCodes.isEmpty()) {
-            return emptyList()
-        }
-
-        // Batch load all related knowledge in a single query
-        return knowledgeRepository.findByCodeIn(targetCodes).toList()
+    private fun loadRelatedKnowledge(knowledgeCode: String): Uni<List<Knowledge>> {
+        return knowledgeRelRepository
+            .findBySourceKnowledgeCode(knowledgeCode)
+            .map { it.targetKnowledgeCode }
+            .collect().asList()
+            .flatMap { targetCodes ->
+                if (targetCodes.isEmpty()) {
+                    Uni.createFrom().item(emptyList())
+                } else {
+                    // Batch load all related knowledge in a single query
+                    knowledgeRepository.findByCodeIn(targetCodes).collect().asList()
+                }
+            }
     }
 
     /**
@@ -93,14 +101,15 @@ class CardTemplateService(
      * @param template Template entity from database
      * @param knowledge Knowledge item to render
      * @param relatedKnowledge List of related knowledge items
-     * @return Rendered content string
+     * @return Uni<String> rendered content string
      */
-    private suspend fun renderTemplate(
+    private fun renderTemplate(
         template: Template,
         knowledge: Knowledge,
         relatedKnowledge: List<Knowledge>,
-    ): String =
-        withContext(Dispatchers.IO) {
+    ): Uni<String> {
+        // Execute FreeMarker rendering on a worker thread to avoid blocking
+        return Uni.createFrom().item {
             try {
                 val templateContent = String(template.content, StandardCharsets.UTF_8)
 
@@ -108,27 +117,22 @@ class CardTemplateService(
                 // Use unique name per request to avoid conflicts in concurrent scenarios
                 val templateLoader =
                     freeMarkerConfig.templateLoader as
-                        com.miguoliang.englishlearning.config.StringTemplateLoader
+                        freemarker.cache.StringTemplateLoader
                 val templateName = "template_${template.code}_${UUID.randomUUID()}"
 
-                try {
-                    templateLoader.putTemplate(templateName, templateContent)
+                templateLoader.putTemplate(templateName, templateContent)
 
-                    // Get FreeMarker template
-                    val fmTemplate = freeMarkerConfig.getTemplate(templateName)
+                // Get FreeMarker template
+                val fmTemplate = freeMarkerConfig.getTemplate(templateName)
 
-                    // Prepare data model for FreeMarker
-                    val dataModel = prepareDataModel(knowledge, relatedKnowledge)
+                // Prepare data model for FreeMarker
+                val dataModel = prepareDataModel(knowledge, relatedKnowledge)
 
-                    // Render template
-                    val writer = StringWriter()
-                    fmTemplate.process(dataModel, writer)
+                // Render template
+                val writer = StringWriter()
+                fmTemplate.process(dataModel, writer)
 
-                    writer.toString()
-                } finally {
-                    // Always clean up template from loader
-                    templateLoader.clearTemplate(templateName)
-                }
+                writer.toString()
             } catch (e: freemarker.template.TemplateException) {
                 throw RuntimeException("FreeMarker template error in template ${template.code}: ${e.message}", e)
             } catch (e: java.io.IOException) {
@@ -136,7 +140,18 @@ class CardTemplateService(
             } catch (e: Exception) {
                 throw RuntimeException("Failed to render FreeMarker template: ${template.code}", e)
             }
+        }.runSubscriptionOn { command ->
+            // Run on Vert.x worker thread pool to avoid blocking event loop
+            val vertx = Vertx.currentContext()?.owner() ?: Vertx.vertx()
+            vertx.executeBlocking<String> { promise ->
+                try {
+                    command.run()
+                } catch (e: Exception) {
+                    promise.fail(e)
+                }
+            }
         }
+    }
 
     /**
      * Prepares data model for FreeMarker template.

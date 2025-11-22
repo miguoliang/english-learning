@@ -1,27 +1,31 @@
 package com.miguoliang.englishlearning.service
 
 import com.miguoliang.englishlearning.model.AccountCard
+import jakarta.enterprise.context.ApplicationScoped
 import java.math.BigDecimal
 import java.time.LocalDateTime
 
 /**
  * Implements the SM-2 spaced repetition algorithm.
- * 
+ *
  * SM-2 Algorithm Logic:
  * - Quality < 3 (Failed): Reset repetitions to 0, interval to 1 day, decrease ease factor by 0.2
  * - Quality >= 3 (Passed): Increase repetitions, calculate new interval based on ease factor
  * - Ease factor adjustment: Based on quality rating (0-5 scale)
  * - Minimum ease factor: 1.3
  */
-object Sm2Algorithm {
-    private const val MIN_EASE_FACTOR = 1.3
-    private const val DEFAULT_EASE_FACTOR = 2.5
-    private const val DEFAULT_INTERVAL_DAYS = 1
-    private const val DEFAULT_REPETITIONS = 0
+@ApplicationScoped
+class Sm2Algorithm {
+    companion object {
+        private const val MIN_EASE_FACTOR = 1.3
+        private const val DEFAULT_EASE_FACTOR = 2.5
+        private const val DEFAULT_INTERVAL_DAYS = 1
+        private const val DEFAULT_REPETITIONS = 0
+    }
 
     /**
      * Calculates the next review state based on quality rating.
-     * 
+     *
      * @param currentCard The current card state
      * @param quality Quality rating (0-5): 0=again, 1=hard, 2=good, 3=easy, 4=very easy, 5=perfect
      * @return Updated AccountCard with new SM-2 state
@@ -59,7 +63,7 @@ object Sm2Algorithm {
 
     /**
      * Creates initial card with default SM-2 values.
-     * 
+     *
      * @param accountId Account ID
      * @param knowledgeCode Knowledge code
      * @param cardTypeCode Card type code
@@ -116,7 +120,7 @@ object Sm2Algorithm {
      * - If repetitions = 1: interval = 1 day
      * - If repetitions = 2: interval = 6 days
      * - If repetitions > 2: interval = previous_interval * ease_factor
-     * 
+     *
      * Since we're calculating from current card state, we use current interval_days as previous interval.
      */
     private fun calculateNewInterval(

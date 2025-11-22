@@ -1,8 +1,7 @@
 package com.miguoliang.englishlearning
 
-import org.springframework.boot.fromApplication
-import org.springframework.boot.with
+import io.quarkus.runtime.Quarkus
 
 fun main(args: Array<String>) {
-    fromApplication<EnglishLearningApplication>().with(TestcontainersConfiguration::class).run(*args)
+    Quarkus.run(*args)
 }

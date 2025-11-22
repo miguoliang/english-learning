@@ -1,16 +1,16 @@
 package com.miguoliang.englishlearning.service
 
+import com.miguoliang.englishlearning.common.Page
+import com.miguoliang.englishlearning.common.Pageable
 import com.miguoliang.englishlearning.model.Knowledge
 import com.miguoliang.englishlearning.repository.KnowledgeRepository
-import kotlinx.coroutines.flow.toList
-import org.springframework.data.domain.Page
-import org.springframework.data.domain.Pageable
-import org.springframework.stereotype.Service
+import io.smallrye.mutiny.Uni
+import jakarta.enterprise.context.ApplicationScoped
 
 /**
  * Manages knowledge operations.
  */
-@Service
+@ApplicationScoped
 class KnowledgeService(
     private val knowledgeRepository: KnowledgeRepository,
     private val paginationHelper: PaginationHelper,
@@ -20,16 +20,16 @@ class KnowledgeService(
      *
      * @param pageable Pagination parameters
      * @param filter Optional filter expression (not implemented in MVP)
-     * @return Page of Knowledge items
+     * @return Uni<Page> of Knowledge items
      */
-    suspend fun getKnowledge(
+    fun getKnowledge(
         pageable: Pageable,
         filter: String? = null,
-    ): Page<Knowledge> {
+    ): Uni<Page<Knowledge>> {
         // TODO: Implement filter support for metadata queries
         return paginationHelper.paginate(
             knowledgeRepository.findAllOrderedByCode(pageable),
-            { knowledgeRepository.count() },
+            knowledgeRepository.count(),
             pageable,
         )
     }
@@ -38,23 +38,25 @@ class KnowledgeService(
      * Get single knowledge item by code.
      *
      * @param code Knowledge code identifier
-     * @return Knowledge or null if not found
+     * @return Uni<Knowledge> or null if not found
      */
-    suspend fun getKnowledgeByCode(code: String): Knowledge? = knowledgeRepository.findByCode(code)
+    fun getKnowledgeByCode(code: String): Uni<Knowledge?> = knowledgeRepository.findByCode(code)
 
     /**
      * Batch load knowledge items by codes.
      *
      * @param codes Collection of knowledge codes
-     * @return Map of code to Knowledge
+     * @return Uni<Map> of code to Knowledge
      */
-    suspend fun getKnowledgeByCodes(codes: Collection<String>): Map<String, Knowledge> =
-        codes.takeIf { it.isNotEmpty() }
-            ?.let {
-                knowledgeRepository
-                    .findByCodeIn(it)
-                    .toList()
-                    .associateBy { knowledge -> knowledge.code }
-            }
-            ?: emptyMap()
+    fun getKnowledgeByCodes(codes: Collection<String>): Uni<Map<String, Knowledge>> =
+        if (codes.isEmpty()) {
+            Uni.createFrom().item(emptyMap())
+        } else {
+            knowledgeRepository
+                .findByCodeIn(codes)
+                .collect().asList()
+                .map { list ->
+                    list.associateBy { knowledge -> knowledge.code }
+                }
+        }
 }

@@ -1,17 +1,27 @@
 package com.miguoliang.englishlearning.repository
 
 import com.miguoliang.englishlearning.model.CardType
-import kotlinx.coroutines.flow.Flow
-import org.springframework.data.r2dbc.repository.Query
-import org.springframework.data.repository.kotlin.CoroutineCrudRepository
-import org.springframework.stereotype.Repository
+import io.quarkus.hibernate.reactive.panache.PanacheRepositoryBase
+import io.smallrye.mutiny.Multi
+import io.smallrye.mutiny.Uni
+import jakarta.enterprise.context.ApplicationScoped
 
-@Repository
-interface CardTypeRepository : CoroutineCrudRepository<CardType, String> {
-    suspend fun findByCode(code: String): CardType?
+@ApplicationScoped
+class CardTypeRepository : PanacheRepositoryBase<CardType, String> {
 
-    suspend fun findByName(name: String): CardType?
+    fun streamAll(): Multi<CardType> {
+        return findAll().stream()
+    }
 
-    @Query("SELECT * FROM card_types WHERE code IN (:codes)")
-    fun findByCodeIn(codes: Collection<String>): Flow<CardType>
+    fun findByCode(code: String): Uni<CardType?> {
+        return findById(code)
+    }
+
+    fun findByName(name: String): Uni<CardType?> {
+        return find("name", name).firstResult()
+    }
+
+    fun findByCodeIn(codes: Collection<String>): Multi<CardType> {
+        return find("code in ?1", codes).stream()
+    }
 }

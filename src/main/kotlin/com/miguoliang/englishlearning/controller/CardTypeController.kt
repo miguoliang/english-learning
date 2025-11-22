@@ -6,18 +6,18 @@ import com.miguoliang.englishlearning.dto.PageDto
 import com.miguoliang.englishlearning.dto.PageInfoDto
 import com.miguoliang.englishlearning.dto.toDto
 import com.miguoliang.englishlearning.service.CardTypeService
-import kotlinx.coroutines.flow.toList
-import org.springframework.data.domain.Pageable
-import org.springframework.http.HttpStatus
-import org.springframework.http.ResponseEntity
-import org.springframework.web.bind.annotation.*
+import io.smallrye.mutiny.Uni
+import jakarta.ws.rs.*
+import jakarta.ws.rs.core.MediaType
+import jakarta.ws.rs.core.Response
 
 /**
  * REST controller for Card Type endpoints.
  * Access: Both operator and client roles (read-only).
  */
-@RestController
-@RequestMapping("/api/v1/card-types")
+@Path("/api/v1/card-types")
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
 class CardTypeController(
     private val cardTypeService: CardTypeService,
 ) {
@@ -25,56 +25,66 @@ class CardTypeController(
      * List all available card types.
      * GET /api/v1/card-types
      */
-    @GetMapping
-    suspend fun listCardTypes(pageable: Pageable): ResponseEntity<PageDto<CardTypeDto>> =
-        try {
-            val cardTypes = cardTypeService.getAllCardTypes().toList()
-            val total = cardTypes.size.toLong()
-            val start = pageable.offset.toInt()
-            val end = minOf(start + pageable.pageSize, cardTypes.size)
-            val pagedContent =
-                if (start < cardTypes.size) {
-                    cardTypes.subList(start, end)
-                } else {
-                    emptyList()
-                }
+    @GET
+    fun listCardTypes(
+        @QueryParam("page") @DefaultValue("0") page: Int,
+        @QueryParam("size") @DefaultValue("20") size: Int,
+    ): Uni<Response> {
+        return cardTypeService.getAllCardTypes()
+            .collect().asList()
+            .map { cardTypes ->
+                val total = cardTypes.size.toLong()
+                val start = page * size
+                val end = minOf(start + size, cardTypes.size)
+                val pagedContent =
+                    if (start < cardTypes.size) {
+                        cardTypes.subList(start, end)
+                    } else {
+                        emptyList()
+                    }
 
-            val pageDto =
-                PageDto(
-                    content = pagedContent.map { it.toDto() },
-                    page =
-                        PageInfoDto(
-                            number = pageable.pageNumber,
-                            size = pageable.pageSize,
-                            totalElements = total,
-                            totalPages = if (total > 0) ((total - 1) / pageable.pageSize + 1).toInt() else 0,
-                        ),
-                )
-            ResponseEntity.ok(pageDto)
-        } catch (error: Exception) {
-            ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(PageDto<CardTypeDto>(emptyList(), PageInfoDto(0, 0, 0, 0)))
-        }
+                val pageDto =
+                    PageDto(
+                        content = pagedContent.map { it.toDto() },
+                        page =
+                            PageInfoDto(
+                                number = page,
+                                size = size,
+                                totalElements = total,
+                                totalPages = if (total > 0) ((total - 1) / size + 1).toInt() else 0,
+                            ),
+                    )
+                Response.ok(pageDto).build()
+            }
+            .onFailure().recoverWithItem { error ->
+                Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(PageDto<CardTypeDto>(emptyList(), PageInfoDto(0, 0, 0, 0)))
+                    .build()
+            }
+    }
 
     /**
      * Get a specific card type.
      * GET /api/v1/card-types/{code}
      */
-    @GetMapping("/{code}")
-    suspend fun getCardType(
-        @PathVariable code: String,
-    ): ResponseEntity<Any> =
-        try {
-            when (val cardType = cardTypeService.getCardTypeByCode(code)) {
-                null -> ResponseEntity
-                    .status(HttpStatus.NOT_FOUND)
-                    .body<Any>(ErrorResponseFactory.notFound("CardType", code))
-                else -> ResponseEntity.ok<Any>(cardType.toDto())
+    @GET
+    @Path("/{code}")
+    fun getCardType(
+        @PathParam("code") code: String,
+    ): Uni<Response> {
+        return cardTypeService.getCardTypeByCode(code)
+            .map { cardType ->
+                when (cardType) {
+                    null -> Response.status(Response.Status.NOT_FOUND)
+                        .entity(ErrorResponseFactory.notFound("CardType", code))
+                        .build()
+                    else -> Response.ok(cardType.toDto()).build()
+                }
             }
-        } catch (error: Exception) {
-            ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body<Any>(ErrorResponseFactory.internalError(error.message ?: "Internal server error"))
-        }
+            .onFailure().recoverWithItem { error ->
+                Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(ErrorResponseFactory.internalError(error.message ?: "Internal server error"))
+                    .build()
+            }
+    }
 }
