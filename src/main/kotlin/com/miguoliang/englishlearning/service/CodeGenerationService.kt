@@ -1,12 +1,12 @@
 package com.miguoliang.englishlearning.service
 
 import io.smallrye.mutiny.coroutines.awaitSuspending
-import io.vertx.mutiny.pgclient.PgPool
+import io.vertx.mutiny.sqlclient.Pool
 import jakarta.enterprise.context.ApplicationScoped
 
 @ApplicationScoped
 class CodeGenerationService(
-    private val pgPool: PgPool,
+    private val pool: Pool,
 ) {
     suspend fun generateCode(prefix: String): String {
         require(prefix in listOf("ST", "CS")) { "Invalid prefix: $prefix. Must be ST or CS" }
@@ -14,7 +14,7 @@ class CodeGenerationService(
 
         val sequenceName = "code_seq_${prefix.lowercase()}"
 
-        val rowSet = pgPool
+        val rowSet = pool
             .query("SELECT nextval('$sequenceName')")
             .execute()
             .awaitSuspending()

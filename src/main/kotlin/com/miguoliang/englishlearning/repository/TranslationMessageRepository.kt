@@ -2,6 +2,7 @@ package com.miguoliang.englishlearning.repository
 
 import com.miguoliang.englishlearning.model.TranslationMessage
 import io.quarkus.hibernate.reactive.panache.PanacheRepositoryBase
+import io.quarkus.panache.common.Parameters
 import io.smallrye.mutiny.coroutines.awaitSuspending
 import jakarta.enterprise.context.ApplicationScoped
 
@@ -9,7 +10,9 @@ import jakarta.enterprise.context.ApplicationScoped
 class TranslationMessageRepository : PanacheRepositoryBase<TranslationMessage, String> {
 
     suspend fun findByTranslationKeyCode(translationKeyCode: String): List<TranslationMessage> {
-        return find("translationKeyCode", translationKeyCode).list().awaitSuspending()
+        return find("translationKeyCode = :code", Parameters.with("code", translationKeyCode))
+            .list<TranslationMessage>()
+            .awaitSuspending()
     }
 
     suspend fun findByTranslationKeyCodeAndLocaleCode(
@@ -17,13 +20,14 @@ class TranslationMessageRepository : PanacheRepositoryBase<TranslationMessage, S
         localeCode: String,
     ): TranslationMessage? {
         return find(
-            "translationKeyCode = ?1 and localeCode = ?2",
-            translationKeyCode,
-            localeCode,
-        ).firstResult().awaitSuspending()
+            "translationKeyCode = :translationKeyCode and localeCode = :localeCode",
+            Parameters.with("translationKeyCode", translationKeyCode).and("localeCode", localeCode),
+        ).firstResult<TranslationMessage>().awaitSuspending()
     }
 
     suspend fun findByLocaleCode(localeCode: String): List<TranslationMessage> {
-        return find("localeCode", localeCode).list().awaitSuspending()
+        return find("localeCode = :localeCode", Parameters.with("localeCode", localeCode))
+            .list<TranslationMessage>()
+            .awaitSuspending()
     }
 }

@@ -2,6 +2,7 @@ package com.miguoliang.englishlearning.repository
 
 import com.miguoliang.englishlearning.model.CardType
 import io.quarkus.hibernate.reactive.panache.PanacheRepositoryBase
+import io.quarkus.panache.common.Parameters
 import io.smallrye.mutiny.coroutines.awaitSuspending
 import jakarta.enterprise.context.ApplicationScoped
 
@@ -9,7 +10,7 @@ import jakarta.enterprise.context.ApplicationScoped
 class CardTypeRepository : PanacheRepositoryBase<CardType, String> {
 
     suspend fun streamAll(): List<CardType> {
-        return findAll().list().awaitSuspending()
+        return findAll().list<CardType>().awaitSuspending()
     }
 
     suspend fun findByCode(code: String): CardType? {
@@ -17,10 +18,14 @@ class CardTypeRepository : PanacheRepositoryBase<CardType, String> {
     }
 
     suspend fun findByName(name: String): CardType? {
-        return find("name", name).firstResult().awaitSuspending()
+        return find("name = :name", Parameters.with("name", name))
+            .firstResult<CardType>()
+            .awaitSuspending()
     }
 
     suspend fun findByCodeIn(codes: Collection<String>): List<CardType> {
-        return find("code in ?1", codes).list().awaitSuspending()
+        return find("code in :codes", Parameters.with("codes", codes))
+            .list<CardType>()
+            .awaitSuspending()
     }
 }

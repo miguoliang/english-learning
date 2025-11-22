@@ -12,7 +12,7 @@ import java.time.LocalDateTime
 class AccountCardRepository : PanacheRepositoryBase<AccountCard, Long> {
 
     suspend fun findByAccountId(accountId: Long): List<AccountCard> {
-        return find("accountId", accountId).list().awaitSuspending()
+        return find("accountId", accountId).list<AccountCard>().awaitSuspending()
     }
 
     suspend fun findDueCardsByAccountId(
@@ -24,7 +24,7 @@ class AccountCardRepository : PanacheRepositoryBase<AccountCard, Long> {
             "accountId = ?1 and nextReviewDate <= ?2 order by nextReviewDate",
             accountId,
             date,
-        ).page(Page.of(pageable.page, pageable.size)).list().awaitSuspending()
+        ).page<AccountCard>(Page.of(pageable.page, pageable.size)).list<AccountCard>().awaitSuspending()
     }
 
     suspend fun countDueCardsByAccountId(
@@ -45,7 +45,7 @@ class AccountCardRepository : PanacheRepositoryBase<AccountCard, Long> {
             accountId,
             date,
             cardTypeCode,
-        ).page(Page.of(pageable.page, pageable.size)).list().awaitSuspending()
+        ).page<AccountCard>(Page.of(pageable.page, pageable.size)).list<AccountCard>().awaitSuspending()
     }
 
     suspend fun countDueCardsByAccountIdAndCardTypeCode(
@@ -71,7 +71,7 @@ class AccountCardRepository : PanacheRepositoryBase<AccountCard, Long> {
             accountId,
             knowledgeCode,
             cardTypeCode,
-        ).firstResult().awaitSuspending()
+        ).firstResult<AccountCard>().awaitSuspending()
     }
 
     suspend fun findByAccountId(
@@ -79,7 +79,7 @@ class AccountCardRepository : PanacheRepositoryBase<AccountCard, Long> {
         pageable: Pageable,
     ): List<AccountCard> {
         return find("accountId = ?1 order by id", accountId)
-            .page(Page.of(pageable.page, pageable.size)).list().awaitSuspending()
+            .page<AccountCard>(Page.of(pageable.page, pageable.size)).list<AccountCard>().awaitSuspending()
     }
 
     suspend fun countByAccountId(accountId: Long): Long {
@@ -95,7 +95,7 @@ class AccountCardRepository : PanacheRepositoryBase<AccountCard, Long> {
             "accountId = ?1 and cardTypeCode = ?2 order by id",
             accountId,
             cardTypeCode,
-        ).page(Page.of(pageable.page, pageable.size)).list().awaitSuspending()
+        ).page<AccountCard>(Page.of(pageable.page, pageable.size)).list<AccountCard>().awaitSuspending()
     }
 
     suspend fun countByAccountIdAndCardTypeCode(
@@ -110,7 +110,7 @@ class AccountCardRepository : PanacheRepositoryBase<AccountCard, Long> {
         pageable: Pageable,
     ): List<AccountCard> {
         return find("accountId = ?1 and repetitions = 0 order by id", accountId)
-            .page(Page.of(pageable.page, pageable.size)).list().awaitSuspending()
+            .page<AccountCard>(Page.of(pageable.page, pageable.size)).list<AccountCard>().awaitSuspending()
     }
 
     suspend fun countByAccountIdAndStatusNew(accountId: Long): Long {
@@ -124,7 +124,7 @@ class AccountCardRepository : PanacheRepositoryBase<AccountCard, Long> {
         return find(
             "accountId = ?1 and repetitions > 0 and repetitions < 3 order by id",
             accountId,
-        ).page(Page.of(pageable.page, pageable.size)).list().awaitSuspending()
+        ).page<AccountCard>(Page.of(pageable.page, pageable.size)).list<AccountCard>().awaitSuspending()
     }
 
     suspend fun countByAccountIdAndStatusLearning(accountId: Long): Long {
@@ -140,7 +140,7 @@ class AccountCardRepository : PanacheRepositoryBase<AccountCard, Long> {
             "accountId = ?1 and nextReviewDate <= ?2 order by id",
             accountId,
             date,
-        ).page(Page.of(pageable.page, pageable.size)).list().awaitSuspending()
+        ).page<AccountCard>(Page.of(pageable.page, pageable.size)).list<AccountCard>().awaitSuspending()
     }
 
     suspend fun countByAccountIdAndStatusReview(
@@ -159,7 +159,7 @@ class AccountCardRepository : PanacheRepositoryBase<AccountCard, Long> {
             "accountId = ?1 and cardTypeCode = ?2 and repetitions = 0 order by id",
             accountId,
             cardTypeCode,
-        ).page(Page.of(pageable.page, pageable.size)).list().awaitSuspending()
+        ).page<AccountCard>(Page.of(pageable.page, pageable.size)).list<AccountCard>().awaitSuspending()
     }
 
     suspend fun countByAccountIdAndCardTypeCodeAndStatusNew(
@@ -182,7 +182,7 @@ class AccountCardRepository : PanacheRepositoryBase<AccountCard, Long> {
             "accountId = ?1 and cardTypeCode = ?2 and repetitions > 0 and repetitions < 3 order by id",
             accountId,
             cardTypeCode,
-        ).page(Page.of(pageable.page, pageable.size)).list().awaitSuspending()
+        ).page<AccountCard>(Page.of(pageable.page, pageable.size)).list<AccountCard>().awaitSuspending()
     }
 
     suspend fun countByAccountIdAndCardTypeCodeAndStatusLearning(
@@ -207,7 +207,7 @@ class AccountCardRepository : PanacheRepositoryBase<AccountCard, Long> {
             accountId,
             cardTypeCode,
             date,
-        ).page(Page.of(pageable.page, pageable.size)).list().awaitSuspending()
+        ).page<AccountCard>(Page.of(pageable.page, pageable.size)).list<AccountCard>().awaitSuspending()
     }
 
     suspend fun countByAccountIdAndCardTypeCodeAndStatusReview(

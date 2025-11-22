@@ -2,6 +2,7 @@ package com.miguoliang.englishlearning.repository
 
 import com.miguoliang.englishlearning.model.TranslationKey
 import io.quarkus.hibernate.reactive.panache.PanacheRepositoryBase
+import io.quarkus.panache.common.Parameters
 import io.smallrye.mutiny.coroutines.awaitSuspending
 import jakarta.enterprise.context.ApplicationScoped
 
@@ -9,6 +10,8 @@ import jakarta.enterprise.context.ApplicationScoped
 class TranslationKeyRepository : PanacheRepositoryBase<TranslationKey, String> {
 
     suspend fun findByKey(key: String): TranslationKey? {
-        return find("key", key).firstResult().awaitSuspending()
+        return find("key = :key", Parameters.with("key", key))
+            .firstResult<TranslationKey>()
+            .awaitSuspending()
     }
 }
