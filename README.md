@@ -1,150 +1,113 @@
-# English Learning System
+# English Learning System - Rust Implementation
 
-A minimal, high-performance spaced repetition learning platform built with **Rust**, using the SM-2 algorithm for optimal learning schedules.
+A minimal, high-performance Rust implementation of the English Learning System with spaced repetition (SM-2 algorithm).
 
-## 🚀 Migration to Rust
+## Technology Stack
 
-This project has been **completely migrated from Kotlin/Quarkus to Rust** for:
-- **Minimal codebase**: No ORM, raw SQL with compile-time checking
-- **High performance**: Zero-cost abstractions, async I/O
-- **Small footprint**: ~15MB binary vs 100MB+ JVM
-- **Fast startup**: <100ms vs ~1-2s
-- **Low memory**: ~10-50MB vs ~200-500MB
+- **Language**: Rust (stable)
+- **Web Framework**: Axum (async, minimal)
+- **Database**: PostgreSQL with sqlx (compile-time checked queries, no ORM)
+- **Migrations**: sqlx-cli
+- **Authentication**: JWT with jsonwebtoken
+- **Template Engine**: Tera (similar to Jinja2)
+- **Async Runtime**: Tokio
+
+## Features
+
+- ✅ JWT-based authentication with role-based access control (client/operator)
+- ✅ SM-2 spaced repetition algorithm for optimal learning
+- ✅ Knowledge management with JSONB metadata
+- ✅ Card types and template system
+- ✅ Account cards with review tracking
+- ✅ Statistics and progress tracking
+- ✅ Raw SQL queries (no ORM) for minimal overhead
+- ✅ Type-safe database queries with sqlx
 
 ## Prerequisites
 
-- **Rust** (1.70+) - [Install Rust](https://rustup.rs/)
-- **PostgreSQL** (14+)
-- **sqlx-cli** - Install with: `cargo install sqlx-cli --no-default-features --features postgres`
+- Rust (1.70+)
+- PostgreSQL (14+)
+- sqlx-cli (`cargo install sqlx-cli --no-default-features --features postgres`)
 
-## Quick Start
+## Setup
 
-### 1. Setup Database
+1. **Clone the repository**
 
 ```bash
-# Create database
-createdb english_learning
-
-# Copy environment file
-cp .env.example .env
-
-# Edit .env with your database credentials
+cd english-learning
 ```
 
-### 2. Run Migrations
+2. **Create .env file**
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and configure your database connection.
+
+3. **Create database**
+
+```bash
+createdb english_learning
+```
+
+4. **Run migrations**
 
 ```bash
 sqlx migrate run
 ```
 
-### 3. Build and Run
+5. **Build the project**
 
 ```bash
-# Development mode
-cargo run
-
-# Production build
 cargo build --release
-./target/release/english-learning
+```
+
+6. **Run the server**
+
+```bash
+cargo run --release
 ```
 
 The server will start on `http://localhost:8080`.
 
-## Common Commands
+## Development
 
-### Development
+### Running in development mode
 
 ```bash
-# Run in development mode
 cargo run
+```
 
-# Run with auto-reload (requires cargo-watch)
-cargo install cargo-watch
-cargo watch -x run
+### Running tests
 
-# Run tests
+```bash
 cargo test
-
-# Run with logging
-RUST_LOG=debug cargo run
 ```
 
-### Build
+### Database migrations
+
+Create a new migration:
 
 ```bash
-# Debug build
-cargo build
-
-# Release build (optimized)
-cargo build --release
-
-# Check without building
-cargo check
-```
-
-### Database
-
-```bash
-# Run migrations
-sqlx migrate run
-
-# Create new migration
 sqlx migrate add <migration_name>
-
-# Revert last migration
-sqlx migrate revert
-
-# Database info
-sqlx database info
 ```
 
-### Code Quality
+Run migrations:
 
 ```bash
-# Format code
-cargo fmt
-
-# Lint code
-cargo clippy
-
-# Run all checks
-cargo fmt && cargo clippy && cargo test
+sqlx migrate run
 ```
 
-## Project Structure
+Revert last migration:
 
+```bash
+sqlx migrate revert
 ```
-.
-├── Cargo.toml              # Rust dependencies and configuration
-├── .env.example            # Environment variables template
-├── ARCHITECTURE.md         # Complete system architecture
-├── README_RUST.md          # Detailed Rust-specific documentation
-├── migrations/             # Database migrations (sqlx)
-│   └── 001_initial_schema.sql
-└── src/
-    ├── main.rs            # Application entry point
-    ├── config.rs          # Configuration management
-    ├── db.rs              # Database connection & code generation
-    ├── models.rs          # Data models and DTOs
-    ├── services.rs        # Business logic layer
-    ├── api.rs             # REST API handlers
-    ├── auth.rs            # JWT authentication
-    ├── error.rs           # Error handling
-    └── sm2.rs             # SM-2 algorithm implementation
-```
-
-## Tech Stack
-
-- **Language**: Rust (stable)
-- **Web Framework**: [Axum](https://github.com/tokio-rs/axum) - Fast, ergonomic async web framework
-- **Database**: PostgreSQL with [sqlx](https://github.com/launchbadge/sqlx) - Compile-time checked queries
-- **Async Runtime**: [Tokio](https://tokio.rs/) - Industry-standard async runtime
-- **Authentication**: JWT with [jsonwebtoken](https://github.com/Keats/jsonwebtoken)
-- **Serialization**: [Serde](https://serde.rs/) - Fast, zero-copy serialization
 
 ## API Documentation
 
-Full API documentation is available in [ARCHITECTURE.md](./ARCHITECTURE.md).
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for complete API documentation.
 
 ### Base URL
 
@@ -154,66 +117,80 @@ http://localhost:8080/api/v1
 
 ### Authentication
 
-All endpoints require JWT authentication via the `Authorization` header:
+All endpoints require a JWT token in the `Authorization` header:
 
 ```
 Authorization: Bearer <token>
 ```
 
+JWT tokens must contain:
+
+- `sub`: Account ID
+- `role`: "client" or "operator"
+- `exp`: Expiration timestamp
+
 ### Key Endpoints
 
-**Knowledge**
-- `GET /api/v1/knowledge` - List knowledge items
-- `GET /api/v1/knowledge/:code` - Get specific knowledge
+#### Knowledge
 
-**Card Types**
+- `GET /api/v1/knowledge` - List knowledge items
+- `GET /api/v1/knowledge/:code` - Get specific knowledge item
+
+#### Card Types
+
 - `GET /api/v1/card-types` - List card types
 - `GET /api/v1/card-types/:code` - Get specific card type
 
-**Account Cards** (Client role required)
+#### Account Cards (Client Role)
+
 - `GET /api/v1/accounts/me/cards` - List my cards
 - `GET /api/v1/accounts/me/cards:due` - Get cards due for review
+- `GET /api/v1/accounts/me/cards/:card_id` - Get specific card
 - `POST /api/v1/accounts/me/cards/:card_id:review` - Submit review
 - `POST /api/v1/accounts/me/cards:initialize` - Initialize cards
 
-**Statistics** (Client role required)
+#### Statistics (Client Role)
+
 - `GET /api/v1/accounts/me/stats` - Get learning statistics
 
-## Environment Variables
+## Project Structure
 
-```bash
-DATABASE_URL=postgres://postgres:postgres@localhost/english_learning
-HOST=0.0.0.0
-PORT=8080
-JWT_SECRET=change-me-in-production
-RUST_LOG=info,english_learning=debug
+```
+src/
+├── main.rs           # Entry point
+├── config.rs         # Configuration
+├── db.rs             # Database connection and code generation
+├── models.rs         # Data models and DTOs
+├── services.rs       # Business logic layer
+├── api.rs            # REST API handlers
+├── auth.rs           # JWT authentication
+├── error.rs          # Error handling
+└── sm2.rs            # SM-2 algorithm implementation
+
+migrations/
+└── 001_initial_schema.sql  # Database schema
 ```
 
 ## Performance Characteristics
 
-| Metric | Rust | Kotlin/Quarkus |
-|--------|------|----------------|
-| Binary Size | ~15MB | ~100MB+ |
-| Memory Usage | ~10-50MB | ~200-500MB |
-| Startup Time | <100ms | ~1-2s |
-| Cold Start | <50ms | ~500ms-1s |
-| Request Latency | <1ms | ~2-5ms |
+- **Zero-cost abstractions**: Rust's ownership system provides memory safety without garbage collection
+- **Compile-time query validation**: sqlx checks SQL queries at compile time
+- **Minimal memory overhead**: No ORM means direct SQL execution
+- **Async I/O**: Tokio runtime provides high-concurrency handling
+- **Small binary size**: ~10-20MB release binary (vs 100MB+ JVM-based solutions)
 
-## Features
+## Comparison with Kotlin/Quarkus
 
-- ✅ **SM-2 Spaced Repetition**: Optimal review scheduling algorithm
-- ✅ **JWT Authentication**: Role-based access control (client/operator)
-- ✅ **Raw SQL**: No ORM overhead, compile-time query validation
-- ✅ **Async I/O**: High-concurrency with Tokio
-- ✅ **Type Safety**: Compile-time guarantees
-- ✅ **Minimal Dependencies**: Small attack surface
-- ✅ **Fast Build**: <10s incremental builds
-
-## Documentation
-
-- [ARCHITECTURE.md](./ARCHITECTURE.md) - Complete system architecture and API specs
-- [README_RUST.md](./README_RUST.md) - Detailed Rust implementation guide
+| Aspect         | Rust           | Kotlin/Quarkus     |
+| -------------- | -------------- | ------------------ |
+| Binary Size    | ~15MB          | ~100MB+            |
+| Memory Usage   | ~10-50MB       | ~200-500MB         |
+| Startup Time   | <100ms         | ~1-2s              |
+| Database Layer | Raw SQL (sqlx) | Hibernate Reactive |
+| Type Safety    | Compile-time   | Runtime            |
+| Performance    | Excellent      | Good               |
+| Learning Curve | Steep          | Moderate           |
 
 ## License
 
-MIT License - See LICENSE file for details
+See main README.md
