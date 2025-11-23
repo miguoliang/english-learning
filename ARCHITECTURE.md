@@ -548,6 +548,107 @@ erDiagram
 - Translation_keys table has unique constraint on key
 - Translation_messages table has unique constraint on (translation_key_code, locale_code)
 
+### Entity Relationship Design Pattern
+
+**Design Decision: Unidirectional Foreign Keys Without JPA Relationship Annotations**
+
+This codebase intentionally uses **simple foreign key fields** instead of JPA relationship annotations (`@OneToMany`, `@ManyToOne`, etc.). While the ER diagrams show logical relationships between entities, these relationships are implemented through:
+
+1. **Database foreign key constraints** - Enforced at the database level
+2. **Explicit repository queries** - Managed in code via repository methods
+3. **Simple scalar fields** - Foreign keys are just `Long` or `String` fields
+
+**Example:**
+```kotlin
+class AccountCard(
+    val accountId: Long,           // Simple field, not @ManyToOne
+    val knowledgeCode: String,     // Simple field, not @ManyToOne
+    val cardTypeCode: String,      // Simple field, not @ManyToOne
+    ...
+)
+```
+
+**Rationale:**
+
+This approach is chosen for the following reasons:
+
+1. **Reactive Framework Compatibility**
+   - Quarkus Reactive Panache has limited support for lazy loading
+   - Avoids `LazyInitializationException` in reactive contexts
+   - No need for session/transaction management for lazy loading
+
+2. **Simpler Entity Design**
+   - Entities are plain Kotlin classes without JPA proxy objects
+   - No bidirectional relationship synchronization required
+   - Easier to test, serialize, and reason about
+   - Compatible with data transfer objects (DTOs)
+
+3. **Explicit Relationship Loading**
+   - Developers explicitly query for related entities when needed
+   - Better control over what data is loaded and when
+   - No hidden N+1 query problems from accidental lazy loading
+   - Batch loading via `findByCodeIn()` methods prevents N+1 queries
+
+4. **Performance Optimization**
+   - Manual join queries in repositories allow for optimization
+   - Batch loading is explicitly implemented where needed
+   - No automatic eager loading of unnecessary data
+   - Index-based queries on foreign key columns
+
+5. **Serialization Simplicity**
+   - No circular reference issues when converting to JSON
+   - No need for `@JsonIgnore` or complex DTO mappings
+   - Clean API responses without entity graph concerns
+
+6. **Microservice Boundaries**
+   - Clear separation between entities
+   - Easier to extract entities to separate services if needed
+   - No tight coupling through bidirectional relationships
+
+**Implementation Pattern:**
+
+Relationships are managed through explicit repository methods:
+
+```kotlin
+// Load related entities explicitly
+val account = accountRepository.findById(accountId)
+val cards = accountCardRepository.findByAccountId(accountId)
+
+// Batch load to avoid N+1 queries
+val knowledgeCodes = cards.map { it.knowledgeCode }.distinct()
+val knowledgeMap = knowledgeRepository.findByCodeIn(knowledgeCodes)
+    .associateBy { it.code }
+```
+
+**When This Pattern Works Best:**
+
+✅ Reactive/async applications (like Quarkus Reactive)
+✅ REST APIs with clear request/response boundaries
+✅ Microservices architecture
+✅ Applications prioritizing explicit data loading
+
+**When NOT to Use This Pattern:**
+
+❌ Traditional blocking JPA applications with complex object graphs
+❌ Applications heavily relying on cascade operations
+❌ Use cases requiring automatic bidirectional navigation
+
+**Database Integrity:**
+
+Foreign key constraints are still enforced at the database level through DDL:
+
+```sql
+ALTER TABLE account_cards
+    ADD CONSTRAINT fk_account_cards_account
+    FOREIGN KEY (account_id) REFERENCES accounts(id);
+
+ALTER TABLE account_cards
+    ADD CONSTRAINT fk_account_cards_knowledge
+    FOREIGN KEY (knowledge_code) REFERENCES knowledge(code);
+```
+
+This ensures referential integrity while keeping entities simple and performant.
+
 ### Metadata Query Examples
 
 Knowledge items can be queried by metadata using JSONB operators:
