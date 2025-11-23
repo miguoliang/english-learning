@@ -15,7 +15,7 @@ impl Sm2Algorithm {
     ) -> (Decimal, i32, i32) {
         let min_ease_factor = Decimal::from_str("1.3").unwrap();
         let mut ease_factor = current_ease_factor;
-        let mut interval_days: i32;
+        let interval_days: i32;
         let mut repetitions = current_repetitions;
 
         if quality < 3 {
@@ -90,7 +90,7 @@ mod tests {
 
     #[test]
     fn test_passed_review_first() {
-        let (ease_factor, interval_days, repetitions) = Sm2Algorithm::calculate_next_review(
+        let (_ease_factor, interval_days, repetitions) = Sm2Algorithm::calculate_next_review(
             Decimal::from_str("2.5").unwrap(),
             1,
             0,
@@ -102,7 +102,7 @@ mod tests {
 
     #[test]
     fn test_passed_review_second() {
-        let (ease_factor, interval_days, repetitions) = Sm2Algorithm::calculate_next_review(
+        let (_ease_factor, interval_days, repetitions) = Sm2Algorithm::calculate_next_review(
             Decimal::from_str("2.5").unwrap(),
             1,
             1,
