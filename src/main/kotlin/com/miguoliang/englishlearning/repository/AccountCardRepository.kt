@@ -10,55 +10,33 @@ import jakarta.inject.Inject
 import org.hibernate.reactive.mutiny.Mutiny
 import java.time.LocalDateTime
 
+/**
+ * Repository for AccountCard entities with dynamic query building to reduce duplication.
+ */
 @ApplicationScoped
 class AccountCardRepository : PanacheRepositoryBase<AccountCard, Long> {
     @Inject
     lateinit var sessionFactory: Mutiny.SessionFactory
 
+    /**
+     * Card status filter types for query building.
+     */
+    enum class StatusFilter {
+        NEW, // repetitions = 0
+        LEARNING, // repetitions > 0 AND repetitions < 3
+        REVIEW, // nextReviewDate <= now
+        DUE, // nextReviewDate <= now (alias for REVIEW)
+    }
+
+    /**
+     * Find all cards for an account (no filters, no pagination).
+     */
     suspend fun findByAccountId(accountId: Long): List<AccountCard> =
         find("accountId", accountId).list<AccountCard>().awaitSuspending()
 
-    suspend fun findDueCardsByAccountId(
-        accountId: Long,
-        date: LocalDateTime,
-        pageable: Pageable,
-    ): List<AccountCard> =
-        find(
-            "accountId = ?1 and nextReviewDate <= ?2 order by nextReviewDate",
-            accountId,
-            date,
-        ).page<AccountCard>(Page.of(pageable.page, pageable.size)).list<AccountCard>().awaitSuspending()
-
-    suspend fun countDueCardsByAccountId(
-        accountId: Long,
-        date: LocalDateTime,
-    ): Long = count("accountId = ?1 and nextReviewDate <= ?2", accountId, date).awaitSuspending()
-
-    suspend fun findDueCardsByAccountIdAndCardTypeCode(
-        accountId: Long,
-        date: LocalDateTime,
-        cardTypeCode: String,
-        pageable: Pageable,
-    ): List<AccountCard> =
-        find(
-            "accountId = ?1 and nextReviewDate <= ?2 and cardTypeCode = ?3 order by nextReviewDate",
-            accountId,
-            date,
-            cardTypeCode,
-        ).page<AccountCard>(Page.of(pageable.page, pageable.size)).list<AccountCard>().awaitSuspending()
-
-    suspend fun countDueCardsByAccountIdAndCardTypeCode(
-        accountId: Long,
-        date: LocalDateTime,
-        cardTypeCode: String,
-    ): Long =
-        count(
-            "accountId = ?1 and nextReviewDate <= ?2 and cardTypeCode = ?3",
-            accountId,
-            date,
-            cardTypeCode,
-        ).awaitSuspending()
-
+    /**
+     * Find a specific card by account, knowledge, and card type.
+     */
     suspend fun findByAccountIdAndKnowledgeCodeAndCardTypeCode(
         accountId: Long,
         knowledgeCode: String,
@@ -71,139 +49,223 @@ class AccountCardRepository : PanacheRepositoryBase<AccountCard, Long> {
             cardTypeCode,
         ).firstResult<AccountCard>().awaitSuspending()
 
+    /**
+     * Dynamic query method that handles all filter combinations.
+     * Replaces ~20 duplicate methods with a single flexible implementation.
+     *
+     * @param accountId Account ID (required)
+     * @param cardTypeCode Optional card type filter
+     * @param statusFilter Optional status filter (NEW, LEARNING, REVIEW, DUE)
+     * @param now Current time (required for REVIEW/DUE status)
+     * @param pageable Optional pagination
+     * @return List of matching cards
+     */
+    suspend fun findWithFilters(
+        accountId: Long,
+        cardTypeCode: String? = null,
+        statusFilter: StatusFilter? = null,
+        now: LocalDateTime? = null,
+        pageable: Pageable? = null,
+    ): List<AccountCard> {
+        val (query, params) = buildQuery(accountId, cardTypeCode, statusFilter, now)
+
+        var panacheQuery = find(query, *params.toTypedArray())
+
+        if (pageable != null) {
+            panacheQuery = panacheQuery.page(Page.of(pageable.page, pageable.size))
+        }
+
+        return panacheQuery.list<AccountCard>().awaitSuspending()
+    }
+
+    /**
+     * Count cards matching the given filters.
+     *
+     * @param accountId Account ID (required)
+     * @param cardTypeCode Optional card type filter
+     * @param statusFilter Optional status filter
+     * @param now Current time (required for REVIEW/DUE status)
+     * @return Count of matching cards
+     */
+    suspend fun countWithFilters(
+        accountId: Long,
+        cardTypeCode: String? = null,
+        statusFilter: StatusFilter? = null,
+        now: LocalDateTime? = null,
+    ): Long {
+        val (query, params) = buildQuery(accountId, cardTypeCode, statusFilter, now, forCount = true)
+        return count(query, *params.toTypedArray()).awaitSuspending()
+    }
+
+    /**
+     * Builds a dynamic query based on provided filters.
+     *
+     * @return Pair of (query string, parameters list)
+     */
+    private fun buildQuery(
+        accountId: Long,
+        cardTypeCode: String?,
+        statusFilter: StatusFilter?,
+        now: LocalDateTime?,
+        forCount: Boolean = false,
+    ): Pair<String, List<Any>> {
+        val conditions = mutableListOf<String>()
+        val params = mutableListOf<Any>()
+        var paramIndex = 1
+
+        // Always filter by accountId
+        conditions.add("accountId = ?$paramIndex")
+        params.add(accountId)
+        paramIndex++
+
+        // Optional: filter by card type
+        if (cardTypeCode != null) {
+            conditions.add("cardTypeCode = ?$paramIndex")
+            params.add(cardTypeCode)
+            paramIndex++
+        }
+
+        // Optional: filter by status
+        when (statusFilter) {
+            StatusFilter.NEW -> {
+                conditions.add("repetitions = 0")
+            }
+            StatusFilter.LEARNING -> {
+                conditions.add("repetitions > 0 and repetitions < 3")
+            }
+            StatusFilter.REVIEW, StatusFilter.DUE -> {
+                require(now != null) { "now parameter is required for REVIEW/DUE status filter" }
+                conditions.add("nextReviewDate <= ?$paramIndex")
+                params.add(now)
+                paramIndex++
+            }
+            null -> { /* no status filter */ }
+        }
+
+        val whereClause = conditions.joinToString(" and ")
+
+        // Add ORDER BY clause (not needed for count queries)
+        val orderBy =
+            if (!forCount) {
+                when (statusFilter) {
+                    StatusFilter.REVIEW, StatusFilter.DUE -> " order by nextReviewDate"
+                    else -> " order by id"
+                }
+            } else {
+                ""
+            }
+
+        return Pair(whereClause + orderBy, params)
+    }
+
+    // ========== Legacy method compatibility wrappers ==========
+    // These delegate to the new dynamic methods to maintain API compatibility
+
+    suspend fun findDueCardsByAccountId(
+        accountId: Long,
+        date: LocalDateTime,
+        pageable: Pageable,
+    ): List<AccountCard> = findWithFilters(accountId, null, StatusFilter.DUE, date, pageable)
+
+    suspend fun countDueCardsByAccountId(
+        accountId: Long,
+        date: LocalDateTime,
+    ): Long = countWithFilters(accountId, null, StatusFilter.DUE, date)
+
+    suspend fun findDueCardsByAccountIdAndCardTypeCode(
+        accountId: Long,
+        date: LocalDateTime,
+        cardTypeCode: String,
+        pageable: Pageable,
+    ): List<AccountCard> = findWithFilters(accountId, cardTypeCode, StatusFilter.DUE, date, pageable)
+
+    suspend fun countDueCardsByAccountIdAndCardTypeCode(
+        accountId: Long,
+        date: LocalDateTime,
+        cardTypeCode: String,
+    ): Long = countWithFilters(accountId, cardTypeCode, StatusFilter.DUE, date)
+
     suspend fun findByAccountId(
         accountId: Long,
         pageable: Pageable,
-    ): List<AccountCard> =
-        find("accountId = ?1 order by id", accountId)
-            .page<AccountCard>(Page.of(pageable.page, pageable.size))
-            .list<AccountCard>()
-            .awaitSuspending()
+    ): List<AccountCard> = findWithFilters(accountId, null, null, null, pageable)
 
-    suspend fun countByAccountId(accountId: Long): Long = count("accountId", accountId).awaitSuspending()
+    suspend fun countByAccountId(accountId: Long): Long = countWithFilters(accountId, null, null, null)
 
     suspend fun findByAccountIdAndCardTypeCode(
         accountId: Long,
         cardTypeCode: String,
         pageable: Pageable,
-    ): List<AccountCard> =
-        find(
-            "accountId = ?1 and cardTypeCode = ?2 order by id",
-            accountId,
-            cardTypeCode,
-        ).page<AccountCard>(Page.of(pageable.page, pageable.size)).list<AccountCard>().awaitSuspending()
+    ): List<AccountCard> = findWithFilters(accountId, cardTypeCode, null, null, pageable)
 
     suspend fun countByAccountIdAndCardTypeCode(
         accountId: Long,
         cardTypeCode: String,
-    ): Long = count("accountId = ?1 and cardTypeCode = ?2", accountId, cardTypeCode).awaitSuspending()
+    ): Long = countWithFilters(accountId, cardTypeCode, null, null)
 
     suspend fun findByAccountIdAndStatusNew(
         accountId: Long,
         pageable: Pageable,
-    ): List<AccountCard> =
-        find("accountId = ?1 and repetitions = 0 order by id", accountId)
-            .page<AccountCard>(Page.of(pageable.page, pageable.size))
-            .list<AccountCard>()
-            .awaitSuspending()
+    ): List<AccountCard> = findWithFilters(accountId, null, StatusFilter.NEW, null, pageable)
 
     suspend fun countByAccountIdAndStatusNew(accountId: Long): Long =
-        count("accountId = ?1 and repetitions = 0", accountId).awaitSuspending()
+        countWithFilters(accountId, null, StatusFilter.NEW, null)
 
     suspend fun findByAccountIdAndStatusLearning(
         accountId: Long,
         pageable: Pageable,
-    ): List<AccountCard> =
-        find(
-            "accountId = ?1 and repetitions > 0 and repetitions < 3 order by id",
-            accountId,
-        ).page<AccountCard>(Page.of(pageable.page, pageable.size)).list<AccountCard>().awaitSuspending()
+    ): List<AccountCard> = findWithFilters(accountId, null, StatusFilter.LEARNING, null, pageable)
 
     suspend fun countByAccountIdAndStatusLearning(accountId: Long): Long =
-        count("accountId = ?1 and repetitions > 0 and repetitions < 3", accountId).awaitSuspending()
+        countWithFilters(accountId, null, StatusFilter.LEARNING, null)
 
     suspend fun findByAccountIdAndStatusReview(
         accountId: Long,
         date: LocalDateTime,
         pageable: Pageable,
-    ): List<AccountCard> =
-        find(
-            "accountId = ?1 and nextReviewDate <= ?2 order by id",
-            accountId,
-            date,
-        ).page<AccountCard>(Page.of(pageable.page, pageable.size)).list<AccountCard>().awaitSuspending()
+    ): List<AccountCard> = findWithFilters(accountId, null, StatusFilter.REVIEW, date, pageable)
 
     suspend fun countByAccountIdAndStatusReview(
         accountId: Long,
         date: LocalDateTime,
-    ): Long = count("accountId = ?1 and nextReviewDate <= ?2", accountId, date).awaitSuspending()
+    ): Long = countWithFilters(accountId, null, StatusFilter.REVIEW, date)
 
     suspend fun findByAccountIdAndCardTypeCodeAndStatusNew(
         accountId: Long,
         cardTypeCode: String,
         pageable: Pageable,
-    ): List<AccountCard> =
-        find(
-            "accountId = ?1 and cardTypeCode = ?2 and repetitions = 0 order by id",
-            accountId,
-            cardTypeCode,
-        ).page<AccountCard>(Page.of(pageable.page, pageable.size)).list<AccountCard>().awaitSuspending()
+    ): List<AccountCard> = findWithFilters(accountId, cardTypeCode, StatusFilter.NEW, null, pageable)
 
     suspend fun countByAccountIdAndCardTypeCodeAndStatusNew(
         accountId: Long,
         cardTypeCode: String,
-    ): Long =
-        count(
-            "accountId = ?1 and cardTypeCode = ?2 and repetitions = 0",
-            accountId,
-            cardTypeCode,
-        ).awaitSuspending()
+    ): Long = countWithFilters(accountId, cardTypeCode, StatusFilter.NEW, null)
 
     suspend fun findByAccountIdAndCardTypeCodeAndStatusLearning(
         accountId: Long,
         cardTypeCode: String,
         pageable: Pageable,
-    ): List<AccountCard> =
-        find(
-            "accountId = ?1 and cardTypeCode = ?2 and repetitions > 0 and repetitions < 3 order by id",
-            accountId,
-            cardTypeCode,
-        ).page<AccountCard>(Page.of(pageable.page, pageable.size)).list<AccountCard>().awaitSuspending()
+    ): List<AccountCard> = findWithFilters(accountId, cardTypeCode, StatusFilter.LEARNING, null, pageable)
 
     suspend fun countByAccountIdAndCardTypeCodeAndStatusLearning(
         accountId: Long,
         cardTypeCode: String,
-    ): Long =
-        count(
-            "accountId = ?1 and cardTypeCode = ?2 and repetitions > 0 and repetitions < 3",
-            accountId,
-            cardTypeCode,
-        ).awaitSuspending()
+    ): Long = countWithFilters(accountId, cardTypeCode, StatusFilter.LEARNING, null)
 
     suspend fun findByAccountIdAndCardTypeCodeAndStatusReview(
         accountId: Long,
         cardTypeCode: String,
         date: LocalDateTime,
         pageable: Pageable,
-    ): List<AccountCard> =
-        find(
-            "accountId = ?1 and cardTypeCode = ?2 and nextReviewDate <= ?3 order by id",
-            accountId,
-            cardTypeCode,
-            date,
-        ).page<AccountCard>(Page.of(pageable.page, pageable.size)).list<AccountCard>().awaitSuspending()
+    ): List<AccountCard> = findWithFilters(accountId, cardTypeCode, StatusFilter.REVIEW, date, pageable)
 
     suspend fun countByAccountIdAndCardTypeCodeAndStatusReview(
         accountId: Long,
         cardTypeCode: String,
         date: LocalDateTime,
-    ): Long =
-        count(
-            "accountId = ?1 and cardTypeCode = ?2 and nextReviewDate <= ?3",
-            accountId,
-            cardTypeCode,
-            date,
-        ).awaitSuspending()
+    ): Long = countWithFilters(accountId, cardTypeCode, StatusFilter.REVIEW, date)
+
+    // ========== Statistics methods ==========
 
     /**
      * Compute statistics for an account using database aggregation.
