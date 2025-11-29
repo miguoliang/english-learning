@@ -16,21 +16,6 @@ CREATE TABLE knowledge (
 
 CREATE INDEX idx_knowledge_metadata_gin ON knowledge USING GIN (metadata);
 
--- Knowledge relationships (self-referential many-to-many)
-CREATE TABLE knowledge_rel (
-    id BIGSERIAL PRIMARY KEY,
-    source_knowledge_code VARCHAR(20) NOT NULL REFERENCES knowledge(code),
-    target_knowledge_code VARCHAR(20) NOT NULL REFERENCES knowledge(code),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    created_by VARCHAR(255),
-    updated_by VARCHAR(255),
-    CONSTRAINT no_self_ref CHECK (source_knowledge_code != target_knowledge_code)
-);
-
-CREATE INDEX idx_knowledge_rel_source ON knowledge_rel(source_knowledge_code);
-CREATE INDEX idx_knowledge_rel_target ON knowledge_rel(target_knowledge_code);
-
 -- Templates table
 CREATE TABLE templates (
     code VARCHAR(20) PRIMARY KEY,
@@ -69,32 +54,6 @@ CREATE TABLE card_type_template_rel (
 
 CREATE INDEX idx_card_type_template_rel_card_type ON card_type_template_rel(card_type_code);
 CREATE INDEX idx_card_type_template_rel_template ON card_type_template_rel(template_code);
-
--- Translation keys table
-CREATE TABLE translation_keys (
-    code VARCHAR(20) PRIMARY KEY,
-    key VARCHAR(100) NOT NULL UNIQUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    created_by VARCHAR(255),
-    updated_by VARCHAR(255)
-);
-
--- Translation messages table
-CREATE TABLE translation_messages (
-    code VARCHAR(20) PRIMARY KEY,
-    translation_key_code VARCHAR(20) NOT NULL REFERENCES translation_keys(code),
-    locale_code VARCHAR(10) NOT NULL,
-    message TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    created_by VARCHAR(255),
-    updated_by VARCHAR(255),
-    CONSTRAINT unique_key_locale UNIQUE (translation_key_code, locale_code)
-);
-
-CREATE INDEX idx_translation_messages_key ON translation_messages(translation_key_code);
-CREATE INDEX idx_translation_messages_locale ON translation_messages(locale_code);
 
 -- Accounts table
 CREATE TABLE accounts (
@@ -142,3 +101,19 @@ CREATE TABLE review_history (
 
 CREATE INDEX idx_review_history_account_card ON review_history(account_card_id);
 CREATE INDEX idx_review_history_reviewed_at ON review_history(reviewed_at);
+
+-- Change requests table
+CREATE TABLE change_requests (
+    id BIGSERIAL PRIMARY KEY,
+    request_type VARCHAR(50) NOT NULL, -- CREATE, UPDATE, DELETE
+    target_code VARCHAR(20), -- Code of item being modified (NULL for CREATE)
+    payload JSONB NOT NULL,
+    status VARCHAR(50) NOT NULL, -- PENDING, APPROVED, REJECTED
+    submitter_id BIGINT NOT NULL REFERENCES accounts(id),
+    reviewer_id BIGINT REFERENCES accounts(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_change_requests_status ON change_requests(status);
+CREATE INDEX idx_change_requests_submitter ON change_requests(submitter_id);

@@ -7,9 +7,9 @@ use std::sync::Arc;
 
 use crate::{
     auth::{require_operator_role, Claims},
-    error::Result,
-    models::{CreateKnowledgeRequest, Knowledge, Page, UpdateKnowledgeRequest},
-    services::KnowledgeService,
+    error::{AppError, Result},
+    models::{ChangeRequest, CreateKnowledgeRequest, Knowledge, Page, UpdateKnowledgeRequest},
+    services::{ChangeRequestService, KnowledgeService},
     api::{AppState, PaginationParams},
 };
 
@@ -36,10 +36,25 @@ pub async fn create_knowledge(
     State(state): State<Arc<AppState>>,
     claims: Claims,
     Json(req): Json<CreateKnowledgeRequest>,
-) -> Result<(StatusCode, Json<Knowledge>)> {
+) -> Result<(StatusCode, Json<ChangeRequest>)> {
     require_operator_role(&claims)?;
-    let knowledge = KnowledgeService::create_knowledge(&state.db, req, &claims.sub).await?;
-    Ok((StatusCode::CREATED, Json(knowledge)))
+    
+    let submitter_id = claims.sub.parse::<i64>()
+        .map_err(|_| AppError::BadRequest("Invalid account ID".to_string()))?;
+
+    let payload = serde_json::to_value(req)
+        .map_err(|e| AppError::InternalServerError(format!("Serialization error: {}", e)))?;
+
+    let request = ChangeRequestService::create_request(
+        &state.db,
+        "CREATE",
+        None,
+        payload,
+        submitter_id,
+    )
+    .await?;
+
+    Ok((StatusCode::ACCEPTED, Json(request)))
 }
 
 pub async fn update_knowledge(
@@ -47,18 +62,45 @@ pub async fn update_knowledge(
     claims: Claims,
     Path(code): Path<String>,
     Json(req): Json<UpdateKnowledgeRequest>,
-) -> Result<Json<Knowledge>> {
+) -> Result<(StatusCode, Json<ChangeRequest>)> {
     require_operator_role(&claims)?;
-    let knowledge = KnowledgeService::update_knowledge(&state.db, &code, req, &claims.sub).await?;
-    Ok(Json(knowledge))
+
+    let submitter_id = claims.sub.parse::<i64>()
+        .map_err(|_| AppError::BadRequest("Invalid account ID".to_string()))?;
+
+    let payload = serde_json::to_value(req)
+        .map_err(|e| AppError::InternalServerError(format!("Serialization error: {}", e)))?;
+
+    let request = ChangeRequestService::create_request(
+        &state.db,
+        "UPDATE",
+        Some(code),
+        payload,
+        submitter_id,
+    )
+    .await?;
+
+    Ok((StatusCode::ACCEPTED, Json(request)))
 }
 
 pub async fn delete_knowledge(
     State(state): State<Arc<AppState>>,
     claims: Claims,
     Path(code): Path<String>,
-) -> Result<StatusCode> {
+) -> Result<(StatusCode, Json<ChangeRequest>)> {
     require_operator_role(&claims)?;
-    KnowledgeService::delete_knowledge(&state.db, &code).await?;
-    Ok(StatusCode::NO_CONTENT)
+
+    let submitter_id = claims.sub.parse::<i64>()
+        .map_err(|_| AppError::BadRequest("Invalid account ID".to_string()))?;
+
+    let request = ChangeRequestService::create_request(
+        &state.db,
+        "DELETE",
+        Some(code),
+        serde_json::Value::Null,
+        submitter_id,
+    )
+    .await?;
+
+    Ok((StatusCode::ACCEPTED, Json(request)))
 }

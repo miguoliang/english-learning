@@ -14,19 +14,19 @@ pub struct Knowledge {
     pub updated_by: Option<String>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct KnowledgeRel {
+pub struct ChangeRequest {
     pub id: i64,
-    pub source_knowledge_code: String,
-    pub target_knowledge_code: String,
+    pub request_type: String,
+    pub target_code: Option<String>,
+    pub payload: serde_json::Value,
+    pub status: String,
+    pub submitter_id: i64,
+    pub reviewer_id: Option<i64>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    pub created_by: Option<String>,
-    pub updated_by: Option<String>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Template {
     pub code: String,

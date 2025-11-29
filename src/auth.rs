@@ -57,6 +57,10 @@ impl Claims {
     pub fn is_operator(&self) -> bool {
         self.role == "operator"
     }
+
+    pub fn is_operator_manager(&self) -> bool {
+        self.role == "operator_manager"
+    }
 }
 
 #[async_trait]
@@ -90,8 +94,8 @@ where
 
 /// Middleware for checking if user has client role
 pub fn require_client_role(claims: &Claims) -> Result<()> {
-    // Operators are also allowed to act as clients for testing/usage purposes
-    if claims.is_client() || claims.is_operator() {
+    // Operators and Managers are also allowed to act as clients for testing/usage purposes
+    if claims.is_client() || claims.is_operator() || claims.is_operator_manager() {
         Ok(())
     } else {
         Err(AppError::Forbidden)
@@ -100,7 +104,16 @@ pub fn require_client_role(claims: &Claims) -> Result<()> {
 
 /// Middleware for checking if user has operator role
 pub fn require_operator_role(claims: &Claims) -> Result<()> {
-    if claims.is_operator() {
+    if claims.is_operator() || claims.is_operator_manager() {
+        Ok(())
+    } else {
+        Err(AppError::Forbidden)
+    }
+}
+
+/// Middleware for checking if user has manager role
+pub fn require_manager_role(claims: &Claims) -> Result<()> {
+    if claims.is_operator_manager() {
         Ok(())
     } else {
         Err(AppError::Forbidden)

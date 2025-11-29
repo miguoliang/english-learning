@@ -11,6 +11,7 @@ pub mod card_types;
 pub mod cards;
 pub mod stats;
 pub mod auth;
+pub mod change_requests;
 
 pub struct AppState {
     pub db: DbPool,
@@ -37,6 +38,9 @@ pub fn routes(state: Arc<AppState>) -> Router {
         // Knowledge endpoints
         .route("/knowledge", get(knowledge::list_knowledge).post(knowledge::create_knowledge))
         .route("/knowledge/:code", get(knowledge::get_knowledge).put(knowledge::update_knowledge).delete(knowledge::delete_knowledge))
+        // Change Requests endpoints
+        .route("/change-requests", get(change_requests::list_change_requests))
+        .route("/change-requests/:id/approval", post(change_requests::approve_reject_request))
         // Card types endpoints
         .route("/card-types", get(card_types::list_card_types))
         .route("/card-types/:code", get(card_types::get_card_type))
