@@ -100,7 +100,6 @@ pub fn require_client_role(claims: &Claims) -> Result<()> {
 }
 
 /// Middleware for checking if user has operator role
-#[allow(dead_code)]
 pub fn require_operator_role(claims: &Claims) -> Result<()> {
     if claims.is_operator() {
         Ok(())

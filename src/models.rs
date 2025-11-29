@@ -103,6 +103,21 @@ pub struct ReviewHistory {
     pub created_by: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateKnowledgeRequest {
+    pub code: String,
+    pub name: String,
+    pub description: String,
+    pub metadata: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpdateKnowledgeRequest {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub metadata: Option<serde_json::Value>,
+}
+
 // DTOs for API responses
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Page<T> {

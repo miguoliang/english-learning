@@ -32,8 +32,8 @@ pub fn default_page_size() -> i64 {
 pub fn routes(state: Arc<AppState>) -> Router {
     Router::new()
         // Knowledge endpoints
-        .route("/knowledge", get(knowledge::list_knowledge))
-        .route("/knowledge/:code", get(knowledge::get_knowledge))
+        .route("/knowledge", get(knowledge::list_knowledge).post(knowledge::create_knowledge))
+        .route("/knowledge/:code", get(knowledge::get_knowledge).put(knowledge::update_knowledge).delete(knowledge::delete_knowledge))
         // Card types endpoints
         .route("/card-types", get(card_types::list_card_types))
         .route("/card-types/:code", get(card_types::get_card_type))
