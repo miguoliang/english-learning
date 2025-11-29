@@ -27,11 +27,20 @@ The database uses PostgreSQL and strictly enforces data integrity via foreign ke
 - **`accounts`**: User identities.
 - **`account_cards`**: Intersection of Account + Knowledge + CardType. Tracks SM-2 state.
 - **`review_history`**: Immutable log of all reviews for analytics.
+- **`change_requests`**: Staging area for content modifications proposed by Operators.
+    - `id` (PK): `BIGSERIAL`.
+    - `request_type`: `CREATE`, `UPDATE`, `DELETE`.
+    - `target_code`: Code of item being modified (nullable for CREATE).
+    - `payload`: JSONB snapshot of proposed state.
+    - `status`: `PENDING`, `APPROVED`, `REJECTED`.
+    - `submitter_id`: Account ID of Operator.
+    - `reviewer_id`: Account ID of Manager (nullable).
 
 #### ER Diagram (Conceptual)
 `Account` 1 -- * `AccountCard` * -- 1 `Knowledge`
 `AccountCard` * -- 1 `CardType`
 `AccountCard` 1 -- * `ReviewHistory`
+`Account` (Operator) 1 -- * `ChangeRequest` * -- 1 `Account` (Manager)
 
 ### 2.2 Data Types & Standards
 - **Codes**: All primary business entities use the `{PREFIX}-{NUMBER}` format.
@@ -103,6 +112,20 @@ Implementation details for content management:
     - **Export**: Streamed CSV response from `knowledge` table.
     - **Import**: Temporal Workflow to handle validation, diffing, and application.
 
+### 3.5 Operator Manager Workflows
+Implementation details for content review and approval:
+
+1.  **Change Request Review**:
+    - **Endpoint**: `GET /api/v1/manager/requests`
+    - **Filtering**: By status (`PENDING`, `APPROVED`, `REJECTED`).
+    - **Auth**: Protected by `require_manager_role` middleware.
+
+2.  **Request Approval/Rejection**:
+    - **Endpoint**: `POST /api/v1/manager/requests/{id}/approve` (or `reject`)
+    - **Logic**:
+        - **Approve**: Applies the JSONB payload to the live `knowledge` table (Insert/Update/Delete). Updates request status to `APPROVED`.
+        - **Reject**: Updates request status to `REJECTED`.
+
 ---
 
 ## 4. Key Design Patterns
@@ -148,7 +171,8 @@ Implementation details for content management:
 ### 5.2 Authorization
 - **Role-Based Access Control (RBAC)**:
     - **`client`**: Access to `/accounts/me/*` and read-only `/knowledge`.
-    - **`operator`**: Full access to `/knowledge/*` (Write) and all accounts.
+    - **`operator`**: Can SUBMIT change requests via `/knowledge` (Write). Cannot modify live DB directly.
+    - **`operator_manager`**: Full access to `/manager/*` to approve requests. Can also act as Operator.
     - *Note*: Operators implicitly have Client permissions for dogfooding/testing.
 
 ---
