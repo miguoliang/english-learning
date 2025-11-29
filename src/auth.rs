@@ -90,7 +90,8 @@ where
 
 /// Middleware for checking if user has client role
 pub fn require_client_role(claims: &Claims) -> Result<()> {
-    if claims.is_client() {
+    // Operators are also allowed to act as clients for testing/usage purposes
+    if claims.is_client() || claims.is_operator() {
         Ok(())
     } else {
         Err(AppError::Forbidden)
