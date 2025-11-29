@@ -1,127 +1,8 @@
 use crate::db::DbPool;
 use crate::error::{AppError, Result};
-use crate::models::*;
+use crate::models::{AccountCard, CardType, Knowledge, Page};
 use crate::sm2::Sm2Algorithm;
 use chrono::Utc;
-
-pub struct KnowledgeService;
-
-impl KnowledgeService {
-    pub async fn get_knowledge_list(
-        pool: &DbPool,
-        page: i64,
-        size: i64,
-    ) -> Result<Page<Knowledge>> {
-        let offset = page * size;
-
-        let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM knowledge")
-            .fetch_one(pool)
-            .await?;
-
-        let items = sqlx::query_as::<_, Knowledge>(
-            "SELECT * FROM knowledge ORDER BY created_at DESC LIMIT $1 OFFSET $2",
-        )
-        .bind(size)
-        .bind(offset)
-        .fetch_all(pool)
-        .await?;
-
-        Ok(Page::new(items, page, size, total))
-    }
-
-    pub async fn get_knowledge_by_code(pool: &DbPool, code: &str) -> Result<Knowledge> {
-        sqlx::query_as::<_, Knowledge>("SELECT * FROM knowledge WHERE code = $1")
-            .bind(code)
-            .fetch_one(pool)
-            .await
-            .map_err(|_| AppError::NotFound(format!("Knowledge with code {} not found", code)))
-    }
-
-    pub async fn get_related_knowledge(
-        pool: &DbPool,
-        knowledge_code: &str,
-    ) -> Result<Vec<Knowledge>> {
-        let items = sqlx::query_as::<_, Knowledge>(
-            r#"
-            SELECT k.* FROM knowledge k
-            INNER JOIN knowledge_rel kr ON k.code = kr.target_knowledge_code
-            WHERE kr.source_knowledge_code = $1
-            "#,
-        )
-        .bind(knowledge_code)
-        .fetch_all(pool)
-        .await?;
-
-        Ok(items)
-    }
-}
-
-pub struct CardTypeService;
-
-impl CardTypeService {
-    pub async fn get_card_types(pool: &DbPool, page: i64, size: i64) -> Result<Page<CardType>> {
-        let offset = page * size;
-
-        let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM card_types")
-            .fetch_one(pool)
-            .await?;
-
-        let items = sqlx::query_as::<_, CardType>(
-            "SELECT * FROM card_types ORDER BY created_at DESC LIMIT $1 OFFSET $2",
-        )
-        .bind(size)
-        .bind(offset)
-        .fetch_all(pool)
-        .await?;
-
-        Ok(Page::new(items, page, size, total))
-    }
-
-    pub async fn get_card_type_by_code(pool: &DbPool, code: &str) -> Result<CardType> {
-        sqlx::query_as::<_, CardType>("SELECT * FROM card_types WHERE code = $1")
-            .bind(code)
-            .fetch_one(pool)
-            .await
-            .map_err(|_| AppError::NotFound(format!("Card type with code {} not found", code)))
-    }
-
-    pub async fn get_templates_for_card_type(
-        pool: &DbPool,
-        card_type_code: &str,
-    ) -> Result<Vec<(Template, String)>> {
-        let rows = sqlx::query_as::<_, (String, String, String, String, Vec<u8>, String)>(
-            r#"
-            SELECT t.code, t.name, t.description, t.format, t.content, rel.role
-            FROM templates t
-            INNER JOIN card_type_template_rel rel ON t.code = rel.template_code
-            WHERE rel.card_type_code = $1
-            "#,
-        )
-        .bind(card_type_code)
-        .fetch_all(pool)
-        .await?;
-
-        Ok(rows
-            .into_iter()
-            .map(|(code, name, desc, format, content, role)| {
-                (
-                    Template {
-                        code,
-                        name,
-                        description: desc,
-                        format,
-                        content,
-                        created_at: Utc::now(),
-                        updated_at: Utc::now(),
-                        created_by: None,
-                        updated_by: None,
-                    },
-                    role,
-                )
-            })
-            .collect())
-    }
-}
 
 pub struct AccountCardService;
 
@@ -135,7 +16,7 @@ impl AccountCardService {
     ) -> Result<Page<AccountCard>> {
         let offset = page * size;
 
-        let (count_query, items_query) = if let Some(ref card_type) = card_type_code {
+        let (count_query, items_query) = if card_type_code.is_some() {
             (
                 "SELECT COUNT(*) FROM account_cards WHERE account_id = $1 AND card_type_code = $2",
                 "SELECT * FROM account_cards WHERE account_id = $1 AND card_type_code = $2 ORDER BY next_review_date ASC LIMIT $3 OFFSET $4",
@@ -342,60 +223,5 @@ impl AccountCardService {
         }
 
         Ok((created, skipped))
-    }
-}
-
-pub struct StatsService;
-
-impl StatsService {
-    pub async fn get_stats(pool: &DbPool, account_id: i64) -> Result<Stats> {
-        let total_cards: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM account_cards WHERE account_id = $1",
-        )
-        .bind(account_id)
-        .fetch_one(pool)
-        .await?;
-
-        let new_cards: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM account_cards WHERE account_id = $1 AND repetitions = 0",
-        )
-        .bind(account_id)
-        .fetch_one(pool)
-        .await?;
-
-        let learning_cards: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM account_cards WHERE account_id = $1 AND repetitions > 0 AND repetitions < 3",
-        )
-        .bind(account_id)
-        .fetch_one(pool)
-        .await?;
-
-        let due_today: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM account_cards WHERE account_id = $1 AND next_review_date <= $2",
-        )
-        .bind(account_id)
-        .bind(Utc::now())
-        .fetch_one(pool)
-        .await?;
-
-        // Get breakdown by card type
-        let by_card_type_rows = sqlx::query_as::<_, (String, i64)>(
-            "SELECT card_type_code, COUNT(*) as count FROM account_cards WHERE account_id = $1 GROUP BY card_type_code",
-        )
-        .bind(account_id)
-        .fetch_all(pool)
-        .await?;
-
-        let by_card_type = by_card_type_rows
-            .into_iter()
-            .collect::<std::collections::HashMap<String, i64>>();
-
-        Ok(Stats {
-            total_cards,
-            new_cards,
-            learning_cards,
-            due_today,
-            by_card_type,
-        })
     }
 }
