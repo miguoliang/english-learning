@@ -67,6 +67,25 @@ The database uses PostgreSQL and strictly enforces data integrity via foreign ke
     - **Operator Dashboard**: Uses Drawer/Sheet patterns for creation flows.
     - **Learner View**: Optimized for focus (Review Mode).
 
+### 3.3 Learner Workflows
+Implementation details for key learner activities:
+
+1.  **Daily Review**:
+    - **Endpoint**: `GET /api/v1/accounts/me/cards/due`
+    - **Logic**: Queries `account_cards` where `next_review_date <= NOW()`.
+    - **Pagination**: Returns batch of cards to frontend.
+    - **Submission**: `POST /api/v1/accounts/me/cards/{id}/review` accepts `quality` (0-5).
+    - **Algorithm**: Backend `CardService` applies SM-2 to update `ease_factor`, `interval_days`, `repetitions`, and `next_review_date`.
+
+2.  **Progress Tracking**:
+    - **Endpoint**: `GET /api/v1/accounts/me/stats`
+    - **Logic**: Aggregates counts (Total, New, Learning, Due) via SQL `COUNT` queries.
+    - **Optimization**: Efficient single-pass or parallel queries.
+
+3.  **Card Management**:
+    - **Endpoint**: `GET /api/v1/accounts/me/cards`
+    - **Filtering**: Supports filters by `card_type_code` and pagination.
+
 ---
 
 ## 4. Key Design Patterns
