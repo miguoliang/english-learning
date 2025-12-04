@@ -1,0 +1,81 @@
+// src/lib/supabaseServer.ts
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+import { NextRequest, NextResponse } from 'next/server'
+
+/**
+ * Create a Supabase client for Middleware
+ * Use this in middleware.ts for session refresh
+ */
+export function createMiddlewareClient(req: NextRequest) {
+  const res = NextResponse.next({ request: req })
+  
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return req.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            req.cookies.set(name, value)
+            res.cookies.set(name, value, options)
+          })
+        },
+      },
+    }
+  )
+
+  return { supabase, res }
+}
+
+/**
+ * Create a Supabase client for Server Components (read-only)
+ * Use this in Server Components to read user data
+ */
+export async function createClient() {
+  const cookieStore = await cookies()
+
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll() {
+          // Read-only in Server Components
+          // Session refresh is handled by middleware
+        },
+      },
+    }
+  )
+}
+
+/**
+ * Create a Supabase client for Route Handlers (with mutations)
+ * Use this in API routes when you need to modify cookies
+ */
+export async function createRouteHandlerClient() {
+  const cookieStore = await cookies()
+
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options)
+          })
+        },
+      },
+    }
+  )
+}
