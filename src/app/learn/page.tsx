@@ -84,7 +84,7 @@ export default function Learn() {
     }
   }
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-3xl">加载中…</div>
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-3xl text-gray-900 dark:text-white">加载中…</div>
   if (cards.length === 0)
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-900 text-4xl font-bold">
@@ -129,13 +129,13 @@ export default function Learn() {
             <div className="flex items-center justify-center gap-4 mb-8">
               <button
                 onClick={(e) => { e.stopPropagation(); speak(current.knowledge.name, 'en-US') }}
-                className="px-4 md:px-6 py-2 md:py-3 rounded-lg bg-indigo-100 dark:bg-indigo-900 hover:scale-110 transition text-sm md:text-base font-medium"
+                className="px-4 md:px-6 py-2 md:py-3 rounded-lg bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200 hover:scale-110 transition text-sm md:text-base font-medium"
               >
                 US Speaker
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); speak(current.knowledge.name, 'en-GB') }}
-                className="px-4 md:px-6 py-2 md:py-3 rounded-lg bg-green-100 dark:bg-green-900 hover:scale-110 transition text-sm md:text-base font-medium"
+                className="px-4 md:px-6 py-2 md:py-3 rounded-lg bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 hover:scale-110 transition text-sm md:text-base font-medium"
               >
                 UK Speaker
               </button>
