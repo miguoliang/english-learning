@@ -22,8 +22,9 @@ export default function SignIn() {
   }
 
   return (
-    <div className="max-w-md md:max-w-lg lg:max-w-xl w-full mx-auto p-5 md:p-8 lg:p-10 min-h-screen flex flex-col justify-center text-center box-border">
-      <h1 className="text-5xl font-bold mb-6 text-gray-900 dark:text-white">背它一辈子</h1>
+    <div className="min-h-screen bg-white dark:bg-gray-900 flex flex-col items-center justify-center">
+      <div className="max-w-md md:max-w-lg lg:max-w-xl w-full mx-auto p-5 md:p-8 lg:p-10 text-center box-border">
+        <h1 className="text-5xl font-bold mb-6 text-gray-900 dark:text-white">背它一辈子</h1>
       <h2 className="mb-6 md:mb-8 lg:mb-10 text-gray-600 dark:text-gray-400 text-lg sm:text-xl md:text-2xl lg:text-3xl">登录</h2>
       <input
         type="email"
@@ -55,6 +56,7 @@ export default function SignIn() {
         <Link href="/signup" className="text-blue-600 dark:text-blue-400 no-underline font-medium hover:underline">
           立即注册
         </Link>
+      </div>
       </div>
     </div>
   )
