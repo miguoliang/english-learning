@@ -22,76 +22,37 @@ export default function SignIn() {
   }
 
   return (
-    <div style={{ 
-      maxWidth: 400, 
-      width: '100%',
-      margin: '0 auto',
-      padding: '20px',
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'center',
-      textAlign: 'center',
-      boxSizing: 'border-box'
-    }}>
-      <h1 style={{ fontSize: 'clamp(24px, 5vw, 32px)', marginBottom: '10px', fontWeight: 'bold' }}>英语学习工具</h1>
-      <h2 style={{ marginBottom: '30px', color: '#666', fontSize: 'clamp(18px, 4vw, 24px)' }}>登录</h2>
+    <div className="max-w-md md:max-w-lg lg:max-w-xl w-full mx-auto p-5 md:p-8 lg:p-10 min-h-screen flex flex-col justify-center text-center box-border">
+      <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-2.5 md:mb-4">英语学习工具</h1>
+      <h2 className="mb-6 md:mb-8 lg:mb-10 text-gray-600 text-lg sm:text-xl md:text-2xl lg:text-3xl">登录</h2>
       <input
         type="email"
         placeholder="邮箱"
         value={email}
         onChange={e => setEmail(e.target.value)}
-        style={{ 
-          width: '100%', 
-          padding: '14px 16px', 
-          margin: '10px 0', 
-          borderRadius: '8px', 
-          border: '1px solid #ddd',
-          fontSize: '16px',
-          boxSizing: 'border-box',
-          WebkitAppearance: 'none'
-        }}
+        className="w-full py-3.5 md:py-4 lg:py-5 px-4 md:px-5 my-2.5 md:my-3 rounded-lg border border-gray-300 text-base md:text-lg box-border appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
       />
       <input
         type="password"
         placeholder="密码"
         value={password}
         onChange={e => setPassword(e.target.value)}
-        style={{ 
-          width: '100%', 
-          padding: '14px 16px', 
-          margin: '10px 0', 
-          borderRadius: '8px', 
-          border: '1px solid #ddd',
-          fontSize: '16px',
-          boxSizing: 'border-box',
-          WebkitAppearance: 'none'
-        }}
+        className="w-full py-3.5 md:py-4 lg:py-5 px-4 md:px-5 my-2.5 md:my-3 rounded-lg border border-gray-300 text-base md:text-lg box-border appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
       />
-      <div style={{ margin: '24px 0' }}>
+      <div className="my-6 md:my-8">
         <button 
           onClick={handleLogin} 
           disabled={loading} 
-          style={{ 
-            width: '100%',
-            padding: '14px 24px', 
-            backgroundColor: '#0070f3',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            fontSize: '16px',
-            fontWeight: '600',
-            minHeight: '48px',
-            touchAction: 'manipulation'
-          }}
+          className={`w-full py-3.5 md:py-4 lg:py-5 px-6 md:px-8 bg-blue-600 text-white border-none rounded-lg text-base md:text-lg font-semibold min-h-[48px] md:min-h-[52px] touch-manipulation transition-colors ${
+            loading ? 'cursor-not-allowed opacity-70' : 'cursor-pointer hover:bg-blue-700 active:bg-blue-800'
+          }`}
         >
           {loading ? '登录中...' : '登录'}
         </button>
       </div>
-      <div style={{ marginTop: '20px', color: '#666', fontSize: '14px' }}>
+      <div className="mt-5 md:mt-6 text-gray-600 text-sm md:text-base">
         还没有账号？{' '}
-        <Link href="/signup" style={{ color: '#0070f3', textDecoration: 'none', fontWeight: '500' }}>
+        <Link href="/signup" className="text-blue-600 no-underline font-medium hover:underline">
           立即注册
         </Link>
       </div>
