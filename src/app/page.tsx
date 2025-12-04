@@ -23,7 +23,7 @@ export default function SignIn() {
 
   return (
     <div className="max-w-md md:max-w-lg lg:max-w-xl w-full mx-auto p-5 md:p-8 lg:p-10 min-h-screen flex flex-col justify-center text-center box-border">
-      <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-2.5 md:mb-4">英语学习工具</h1>
+      <h1 className="text-5xl font-bold mb-6">背它一辈子</h1>
       <h2 className="mb-6 md:mb-8 lg:mb-10 text-gray-600 text-lg sm:text-xl md:text-2xl lg:text-3xl">登录</h2>
       <input
         type="email"
