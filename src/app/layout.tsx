@@ -8,7 +8,7 @@ import { NavigationFooter } from './components/NavigationFooter'
 import { usePathname } from 'next/navigation'
 
 // Routes that should show the navigation footer
-const FOOTER_ROUTES = ["/learn", "/stats", "/operator"];
+const FOOTER_ROUTES = ["/learn", "/stats"];
 
 export default function RootLayout({
   children,
