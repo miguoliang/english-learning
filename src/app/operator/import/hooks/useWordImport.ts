@@ -18,6 +18,9 @@ export function useWordImport() {
     try {
       const res = await fetch("/api/import-words", {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ words: previewData.rows }),
       });
 

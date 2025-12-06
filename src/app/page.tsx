@@ -8,16 +8,56 @@ import Link from "next/link";
 
 export default function SignIn() {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const supabase = createClient();
   const router = useRouter();
 
-  const handleLogin = async () => {
+  const handleSendOtp = async () => {
+    if (!email) {
+      alert("请输入邮箱");
+      return;
+    }
+
     setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          shouldCreateUser: true,
+        },
+      });
+
+      if (error) {
+        console.error("OTP Error:", error);
+        alert(error.message);
+        setLoading(false);
+        return;
+      }
+
+      setOtpSent(true);
+      setLoading(false);
+      alert("验证码已发送到您的邮箱，请查收");
+    } catch (err: any) {
+      console.error("OTP Exception:", err);
+      alert(err.message || "发送验证码失败，请检查网络连接");
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!otp) {
+      alert("请输入验证码");
+      return;
+    }
+
+    setLoading(true);
+    const { data, error } = await supabase.auth.verifyOtp({
       email,
-      password,
+      token: otp,
+      type: "email",
     });
 
     if (error) {
@@ -49,27 +89,55 @@ export default function SignIn() {
           placeholder="邮箱"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full py-3.5 md:py-4 lg:py-5 px-4 md:px-5 my-2.5 md:my-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 text-base md:text-lg box-border appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+          disabled={otpSent}
+          className="w-full py-3.5 md:py-4 lg:py-5 px-4 md:px-5 my-2.5 md:my-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 text-base md:text-lg box-border appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
         />
-        <input
-          type="password"
-          placeholder="密码"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full py-3.5 md:py-4 lg:py-5 px-4 md:px-5 my-2.5 md:my-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 text-base md:text-lg box-border appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
-        />
+        {otpSent && (
+          <input
+            type="text"
+            placeholder="请输入验证码"
+            value={otp}
+            onChange={(e) => setOtp(e.target.value)}
+            className="w-full py-3.5 md:py-4 lg:py-5 px-4 md:px-5 my-2.5 md:my-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 text-base md:text-lg box-border appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent"
+          />
+        )}
         <div className="my-6 md:my-8">
-          <button
-            onClick={handleLogin}
-            disabled={loading}
-            className={`w-full py-3.5 md:py-4 lg:py-5 px-6 md:px-8 bg-blue-600 dark:bg-blue-700 text-white border-none rounded-lg text-base md:text-lg font-semibold min-h-[48px] md:min-h-[52px] touch-manipulation transition-colors ${
-              loading
-                ? "cursor-not-allowed opacity-70"
-                : "cursor-pointer hover:bg-blue-700 dark:hover:bg-blue-600 active:bg-blue-800 dark:active:bg-blue-500"
-            }`}
-          >
-            {loading ? "登录中..." : "登录"}
-          </button>
+          {!otpSent ? (
+            <button
+              onClick={handleSendOtp}
+              disabled={loading}
+              className={`w-full py-3.5 md:py-4 lg:py-5 px-6 md:px-8 bg-blue-600 dark:bg-blue-700 text-white border-none rounded-lg text-base md:text-lg font-semibold min-h-[48px] md:min-h-[52px] touch-manipulation transition-colors ${
+                loading
+                  ? "cursor-not-allowed opacity-70"
+                  : "cursor-pointer hover:bg-blue-700 dark:hover:bg-blue-600 active:bg-blue-800 dark:active:bg-blue-500"
+              }`}
+            >
+              {loading ? "发送中..." : "发送验证码"}
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={handleVerifyOtp}
+                disabled={loading}
+                className={`w-full py-3.5 md:py-4 lg:py-5 px-6 md:px-8 bg-blue-600 dark:bg-blue-700 text-white border-none rounded-lg text-base md:text-lg font-semibold min-h-[48px] md:min-h-[52px] touch-manipulation transition-colors ${
+                  loading
+                    ? "cursor-not-allowed opacity-70"
+                    : "cursor-pointer hover:bg-blue-700 dark:hover:bg-blue-600 active:bg-blue-800 dark:active:bg-blue-500"
+                }`}
+              >
+                {loading ? "验证中..." : "验证登录"}
+              </button>
+              <button
+                onClick={() => {
+                  setOtpSent(false);
+                  setOtp("");
+                }}
+                className="w-full mt-3 py-2 px-4 text-gray-600 dark:text-gray-400 text-sm hover:text-gray-900 dark:hover:text-gray-200"
+              >
+                重新发送验证码
+              </button>
+            </>
+          )}
         </div>
         <div className="mt-5 md:mt-6 text-gray-600 dark:text-gray-400 text-sm md:text-base">
           还没有账号？{" "}

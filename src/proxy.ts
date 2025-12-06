@@ -8,12 +8,22 @@ export async function proxy(req: NextRequest) {
     // Refresh session if expired - required for Server Components
     await supabase.auth.getSession()
 
+    // Add CORS headers for Supabase API calls
+    res.headers.set('Access-Control-Allow-Origin', '*')
+    res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+    res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+
     return res
   } catch (error) {
     // If there's an error (e.g., during prerendering), just continue
     // This prevents crashes during static generation
     console.error(error)
-    return NextResponse.next({ request: req })
+    const res = NextResponse.next({ request: req })
+    // Add CORS headers even on error
+    res.headers.set('Access-Control-Allow-Origin', '*')
+    res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+    res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    return res
   }
 }
 

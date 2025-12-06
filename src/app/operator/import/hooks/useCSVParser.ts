@@ -1,9 +1,10 @@
 import { useState } from "react";
 import Papa from "papaparse";
+import { WordData } from "../types";
 
 export interface CSVData {
   headers: string[];
-  rows: any[];
+  rows: WordData[];
 }
 
 export function useCSVParser() {
@@ -28,20 +29,63 @@ export function useCSVParser() {
             return;
           }
 
-          // First row is headers
-          const headers = data[0].map((h) => h.trim());
+          // First row is headers - handle duplicate keys by keeping only the first occurrence
+          const headers: string[] = [];
+          const headerIndexMap = new Map<string, number>();
           
-          // Rest are data rows, convert to objects
-          const rows = data.slice(1).map((row) => {
-            const obj: any = {};
-            headers.forEach((header, index) => {
-              const value = row[index];
-              obj[header] = typeof value === "string" ? value.trim() : value || "";
-            });
-            return obj;
-          }).filter(row => Object.values(row).some(val => val && typeof val === "string" && val.trim() !== ""));
+          data[0].forEach((h, index) => {
+            const trimmedHeader = h.trim();
+            if (!headerIndexMap.has(trimmedHeader)) {
+              headerIndexMap.set(trimmedHeader, index);
+              headers.push(trimmedHeader);
+            }
+            // If duplicate, ignore it
+          });
+          
+          // Rest are data rows, convert to standardized WordData format
+          const rows: WordData[] = data.slice(1)
+            .map((row) => {
+              const rowObj: any = {};
+              headers.forEach((header) => {
+                const index = headerIndexMap.get(header);
+                if (index !== undefined) {
+                  const value = row[index];
+                  rowObj[header] = typeof value === "string" ? value.trim() : value || "";
+                }
+              });
 
-          resolve({ headers, rows });
+              // Map CSV columns to standardized WordData structure
+              const wordData: WordData = {
+                name: rowObj["English Word"] || rowObj["english"] || rowObj["word"] || rowObj["name"] || "",
+                description: rowObj["Chinese Translation"] || rowObj["chinese"] || rowObj["translation"] || rowObj["description"] || "",
+                metadata: {
+                  pos: rowObj["POS"] || rowObj["pos"] || null,
+                  level: rowObj["Level"] || rowObj["level"] || null,
+                  example: rowObj["Example Sentence"] || rowObj["example"] || rowObj["exampleSentence"] || null,
+                  prompt: rowObj["Self-Examine Prompt"] || rowObj["prompt"] || rowObj["selfExaminePrompt"] || null,
+                  theme: rowObj["Theme"] || rowObj["theme"] || null,
+                  phonetic: rowObj["Phonetic"] || rowObj["phonetic"] || null,
+                },
+              };
+
+              return wordData;
+            })
+            .filter((word) => word.name && word.name.trim() !== "");
+
+          // Remove duplicates based on name (case-sensitive)
+          const seenNames = new Set<string>();
+          const uniqueRows: WordData[] = [];
+          
+          rows.forEach((word) => {
+            const trimmedName = word.name.trim();
+            if (!seenNames.has(trimmedName)) {
+              seenNames.add(trimmedName);
+              uniqueRows.push(word);
+            }
+            // If duplicate name, ignore it and continue
+          });
+
+          resolve({ headers, rows: uniqueRows });
         },
         error: (error: Error) => {
           reject(new Error(`CSV 解析失败: ${error.message}`));
